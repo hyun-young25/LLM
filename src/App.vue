@@ -4,6 +4,7 @@ import { applySamplingTemperature, sampleCandidate } from "./sampling.js";
 import { requestPrediction, DEMO_NOTE } from "./prediction.js";
 import { softmax, causalWeights, feedForward } from "./learningMath.js";
 import GuidedLearning from "./GuidedLearning.vue";
+import ConceptExplainer from "./ConceptExplainer.vue";
 
 const pages = [
   {
@@ -29,10 +30,10 @@ const pages = [
   },
   {
     key: "ffn",
-    title: "FFN",
+    title: "피드포워드(FFN)",
     label: "피드포워드",
-    oneLine: "토큰별 벡터를 넓은 차원으로 확장한 뒤 다시 줄이며 특징을 정리합니다.",
-    note: "FFN은 각 토큰 위치에 같은 작은 신경망을 적용합니다. 차원을 넓히며 후보 특징을 만들고, 다시 줄여 다음 단계에 필요한 신호만 남깁니다.",
+    oneLine: "각 토큰의 숫자 목록을 넓혀 계산한 뒤, 원래 개수의 새 숫자 목록으로 바꿉니다.",
+    note: "FFN은 각 토큰 위치에 같은 신경망을 따로 적용합니다. 이 모형은 4개 숫자를 더 많은 중간 숫자로 변환하고 ReLU를 적용한 뒤, 다시 4개로 바꿉니다. 입출력의 숫자 개수는 같지만 값은 달라집니다.",
   },
   {
     key: "output",
@@ -54,7 +55,7 @@ const observationPrompts = {
   tokenize: { question: '같은 말을 두 번 입력하면 토큰 ID도 같을까요?', answer: '같은 토큰은 같은 ID를 사용합니다. ID는 단어의 중요도나 정답 점수가 아니라 토큰을 구별하는 번호입니다. 현재 분할 규칙은 실제 GPT 토크나이저와 다릅니다.' },
   embedding: { question: '차원을 16에서 32로 늘리면, 토큰 ID와 숫자 성분의 개수는 각각 어떻게 될까요?', answer: 'ID는 그대로이고 벡터 성분 수가 늘어납니다. 실제 모델은 이 벡터 값을 학습하지만, 이 화면의 값은 설명을 위한 고정 예시입니다.' },
   attention: { question: '앞쪽 토큰을 선택해 보세요. 그 위치보다 뒤쪽 토큰의 Attention 비중은 어떻게 되나요?', answer: '미래 위치의 비중은 0이 됩니다. 선택한 위치까지의 정보만 이용하도록 가리는 인과 마스킹입니다. 보이는 토큰은 일반 단계에서 최근 8개로 제한합니다.' },
-  ffn: { question: 'Hidden dimension을 바꾸면 입력과 출력의 성분 수도 바뀔까요?', answer: '가운데 은닉층의 성분 수만 바뀌고 입출력은 4차원을 유지합니다. 그림은 최대 8개 은닉 노드를 표시하며, 선택한 전체 차원으로 계산합니다.' },
+  ffn: { question: '중간 숫자 수(은닉 차원)를 바꾸면 입력과 출력의 숫자 개수도 바뀔까요?', answer: '중간 숫자 수만 바뀌고 입력과 출력은 각각 4개를 유지합니다. 차원은 숫자 성분의 개수입니다. 그림은 중간 노드 중 최대 8개를 표시하며, 계산에는 선택한 전체 차원을 사용합니다. 아래 숫자 보기에서 값의 변화도 비교하세요.' },
   output: { question: '후보가 둘 이상일 때 Temperature를 올리면 낮았던 후보의 비중은 어떻게 바뀌나요?', answer: '같은 기준 분포에서 확률 차이가 줄어듭니다. 높은 확률이 사실의 정확성을 뜻하거나, 그 후보가 반드시 선택된다는 뜻은 아닙니다.' },
   test: { question: '생성된 조각 하나를 고르고, 다음 반복의 입력 문맥에도 포함됐는지 확인해 보세요.', answer: '새 토큰은 기존 문맥 뒤에 붙습니다. 다음 반복은 이 늘어난 문맥을 바탕으로 다음 토큰을 선택하는 과정을 보여 줍니다.' },
 };
@@ -884,6 +885,8 @@ onUnmounted(() => {
       <button class="ghost-button" type="button" @click="reset">초기화</button>
     </section>
 
+    <ConceptExplainer v-if="activePage.key === 'ffn' || activePage.key === 'output'" :kind="activePage.key === 'ffn' ? 'ffn' : 'temperature'" />
+
     <aside class="advanced-observation">
       <strong>이 단계에서 관찰할 질문</strong>
       <p>{{ observationPrompts[activePage.key].question }}</p>
@@ -904,7 +907,7 @@ onUnmounted(() => {
           <code>Attention = softmax(QK^T / sqrt(d_k) + mask)V</code>
         </div>
         <div v-else-if="activePage.key === 'ffn'" class="formula-note" aria-label="FFN 수식">
-          <span>FFN formula</span>
+          <span>계산식 · d는 숫자의 개수</span>
           <code>x({{ ffnVectors.input.length }}d) -> h({{ ffnHiddenDimension }}d) -> y({{ ffnVectors.output.length }}d)</code>
           <code>h = ReLU(xW1 + b1), y = hW2 + b2</code>
         </div>
@@ -1052,16 +1055,17 @@ onUnmounted(() => {
       </div>
 
       <div v-else-if="activePage.key === 'ffn'" class="lesson-scene ffn-scene">
+        <p class="ffn-context">지금 변환하는 토큰: <strong>{{ selectedAttentionItem.token }}</strong> · Attention에서 이 토큰이 모은 정보를 사용합니다.</p>
         <label class="hidden-control" for="ffnHiddenDimension">
-          <span>Hidden dimension</span>
+          <span>중간 숫자 수 · 은닉 차원</span>
           <select id="ffnHiddenDimension" v-model.number="ffnHiddenDimension">
-            <option v-for="option in ffnHiddenOptions" :key="option" :value="option">{{ option }}d</option>
+            <option v-for="option in ffnHiddenOptions" :key="option" :value="option">{{ option }}개</option>
           </select>
         </label>
         <div class="network-legend" aria-hidden="true">
-          <span>입력 {{ ffnVectors.input.length }}d</span>
-          <span>확장 {{ ffnVectors.hidden.length }}d</span>
-          <span>출력 {{ ffnVectors.output.length }}d</span>
+          <span>1. 입력 · 숫자 {{ ffnVectors.input.length }}개</span>
+          <span>2. 중간 · 숫자 {{ ffnVectors.hidden.length }}개</span>
+          <span>3. 출력 · 숫자 {{ ffnVectors.output.length }}개</span>
         </div>
         <svg class="ffn-network" viewBox="0 0 720 320" role="img" aria-label="피드포워드 신경망 데이터 흐름">
           <line
@@ -1085,9 +1089,14 @@ onUnmounted(() => {
           </g>
         </svg>
         <p class="mini-note">
-          입력과 출력은 Attention에서 넘어온 {{ ffnVectors.input.length }}d 벡터와 동일하게 유지하고,
-          가운데 hidden dimension만 넓혀 특징을 만든 뒤 다시 줄입니다. 모든 토큰에 동일한 가중치를 사용합니다. 그림은 은닉 노드 중 최대 8개만 보여줍니다.
+          원 하나는 숫자 하나, 선은 곱셈과 덧셈에 쓰이는 연결을 나타냅니다. 그림은 중간 숫자 중 최대 8개만 표시하지만 계산에는 {{ ffnVectors.hidden.length }}개를 모두 사용합니다.
         </p>
+        <div class="ffn-values" aria-label="피드포워드에서 실제 계산한 숫자">
+          <section><h3>1. 입력 숫자 {{ ffnVectors.input.length }}개</h3><p>앞 문맥을 반영한 숫자 목록</p><code>{{ ffnVectors.input.map(value => value.toFixed(2)).join(' · ') }}</code></section>
+          <section><h3>2. 중간 숫자 {{ ffnVectors.hidden.length }}개</h3><p>곱셈·덧셈 후 ReLU 적용 · 앞 8개 표시</p><code>{{ ffnVectors.hidden.slice(0, 8).map(value => value.toFixed(2)).join(' · ') }}{{ ffnVectors.hidden.length > 8 ? ' · …' : '' }}</code><details v-if="ffnVectors.hidden.length > 8"><summary>중간 숫자 전체 보기</summary><code>{{ ffnVectors.hidden.map(value => value.toFixed(2)).join(' · ') }}</code></details></section>
+          <section><h3>3. 출력 숫자 {{ ffnVectors.output.length }}개</h3><p>다음 단계로 전달할 새로운 숫자 목록</p><code>{{ ffnVectors.output.map(value => value.toFixed(2)).join(' · ') }}</code></section>
+        </div>
+        <p class="mini-note">중간 숫자 수를 8개와 16개로 바꾸며 비교해 보세요. 입력은 그대로, 출력은 개수를 유지한 채 값이 달라집니다. 위 값은 소수 둘째 자리까지 표시한 모형의 계산 결과이며 실제 GPT의 내부 값이 아닙니다.</p>
       </div>
 
       <div v-else-if="activePage.key === 'output'" class="lesson-scene output-scene">
@@ -1124,7 +1133,7 @@ onUnmounted(() => {
             </button>
           </div>
           <label class="temperature-control" for="temperatureRange">
-            <span>Temperature {{ temperature.toFixed(1) }}</span>
+            <span>온도(Temperature) {{ temperature.toFixed(1) }}</span>
             <input id="temperatureRange" v-model.number="temperature" :disabled="testStatus === 'loading'" type="range" min="0.2" max="1.6" step="0.1" />
           </label>
           <p v-if="generationEnded" class="api-note">생성이 끝났습니다. 초기화하면 다시 시작할 수 있습니다.</p>

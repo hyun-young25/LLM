@@ -667,9 +667,20 @@ code {
 
 .ffn-scene {
   display: grid;
-  grid-template-rows: auto auto minmax(320px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
   gap: 16px;
 }
+
+.ffn-context { margin: 0; line-height: 1.7; }
+.ffn-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ffn-values section { min-width: 0; padding: 16px; border: 1px solid #dce2e6; border-radius: 10px; background: #fff; }
+.ffn-values h3 { margin: 0; font-size: 1rem; }
+.ffn-values p, .ffn-values summary { font-size: .875rem; line-height: 1.6; }
+.ffn-values code { display: block; color: #12586b; font-size: .9375rem; line-height: 1.9; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ffn-values summary { cursor: pointer; padding: 8px 0; font-weight: 700; }
+.ffn-values summary:focus-visible { outline: 3px solid #12657a; outline-offset: 3px; }
+@media (max-width: 760px) { .ffn-values { grid-template-columns: minmax(0, 1fr); } }
 
 .hidden-control {
   max-width: 360px;
