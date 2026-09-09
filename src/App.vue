@@ -832,7 +832,7 @@ onUnmounted(() => {
     <header class="app-header" :class="{ 'guided-header': viewMode === 'guided' }">
       <div>
         <p class="eyebrow">GPT generation visualizer</p>
-        <h1 class="app-main-title">GPT가 글을 만드는 과정</h1>
+        <h1 class="app-main-title">GPT의 텍스트 생성 원리</h1>
       </div>
       <div v-if="viewMode === 'advanced'" class="prompt-control" aria-label="프롬프트 입력">
         <label for="promptInput">프롬프트</label>
