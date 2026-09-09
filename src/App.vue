@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { applySamplingTemperature, sampleCandidate } from "./sampling.js";
 import { requestPrediction, DEMO_NOTE } from "./prediction.js";
 import { softmax, causalWeights, feedForward } from "./learningMath.js";
+import GuidedLearning from "./GuidedLearning.vue";
 
 const pages = [
   {
@@ -35,7 +36,7 @@ const pages = [
   },
   {
     key: "output",
-    title: "Final Logits",
+    title: "후보 확률과 선택",
     label: "최종 출력",
     oneLine: "후보 확률에 Temperature를 적용하고 하나를 골라 문맥 뒤에 붙입니다.",
     note: "Logit은 다음 토큰 후보의 원점수입니다. softmax와 temperature를 거쳐 확률 분포가 되고, 선택된 토큰은 다시 입력 문맥에 추가됩니다. 여기서는 실제 출력층 대신 별도 예시 후보로 샘플링을 체험합니다.",
@@ -49,6 +50,15 @@ const pages = [
   },
 ];
 
+const observationPrompts = {
+  tokenize: { question: '같은 말을 두 번 입력하면 토큰 ID도 같을까요?', answer: '같은 토큰은 같은 ID를 사용합니다. ID는 단어의 중요도나 정답 점수가 아니라 토큰을 구별하는 번호입니다. 현재 분할 규칙은 실제 GPT 토크나이저와 다릅니다.' },
+  embedding: { question: '차원을 16에서 32로 늘리면, 토큰 ID와 숫자 성분의 개수는 각각 어떻게 될까요?', answer: 'ID는 그대로이고 벡터 성분 수가 늘어납니다. 실제 모델은 이 벡터 값을 학습하지만, 이 화면의 값은 설명을 위한 고정 예시입니다.' },
+  attention: { question: '앞쪽 토큰을 선택해 보세요. 그 위치보다 뒤쪽 토큰의 Attention 비중은 어떻게 되나요?', answer: '미래 위치의 비중은 0이 됩니다. 선택한 위치까지의 정보만 이용하도록 가리는 인과 마스킹입니다. 보이는 토큰은 일반 단계에서 최근 8개로 제한합니다.' },
+  ffn: { question: 'Hidden dimension을 바꾸면 입력과 출력의 성분 수도 바뀔까요?', answer: '가운데 은닉층의 성분 수만 바뀌고 입출력은 4차원을 유지합니다. 그림은 최대 8개 은닉 노드를 표시하며, 선택한 전체 차원으로 계산합니다.' },
+  output: { question: '후보가 둘 이상일 때 Temperature를 올리면 낮았던 후보의 비중은 어떻게 바뀌나요?', answer: '같은 기준 분포에서 확률 차이가 줄어듭니다. 높은 확률이 사실의 정확성을 뜻하거나, 그 후보가 반드시 선택된다는 뜻은 아닙니다.' },
+  test: { question: '생성된 조각 하나를 고르고, 다음 반복의 입력 문맥에도 포함됐는지 확인해 보세요.', answer: '새 토큰은 기존 문맥 뒤에 붙습니다. 다음 반복은 이 늘어난 문맥을 바탕으로 다음 토큰을 선택하는 과정을 보여 줍니다.' },
+};
+
 const palette = ["#156c83", "#db6f38", "#587f37", "#7b5aa6", "#b04e62", "#3e719e"];
 const embeddingOptions = [8, 16, 32];
 const ffnHiddenOptions = [8, 12, 16, 24, 32];
@@ -57,6 +67,7 @@ const TEST_TURN_ANIMATION_MS = 3300;
 
 const prompt = ref("오늘 날씨가 어때?");
 const activePageIndex = ref(0);
+const viewMode = ref("guided");
 const embeddingDimension = ref(16);
 const ffnHiddenDimension = ref(16);
 const selectedAttentionIndex = ref(null);
@@ -685,7 +696,7 @@ async function requestGeminiPrediction() {
 }
 
 function maybePredictOnOutputPage() {
-  if (activePage.value.key !== "output") return;
+  if (viewMode.value !== "advanced" || activePage.value.key !== "output") return;
   if (predictionStatus.value === "loading" || geminiPrediction.value) return;
   requestGeminiPrediction();
 }
@@ -770,16 +781,34 @@ watch(predictionMode, reset);
 
 watch(activePageIndex, maybePredictOnOutputPage);
 
+function showGuided() {
+  clearPrediction();
+  stopTest();
+  viewMode.value = "guided";
+  window.history.replaceState(null, "", "#learn");
+}
+
+async function openInternal(page = "tokenize", context = prompt.value) {
+  viewMode.value = "advanced";
+  reset();
+  prompt.value = context;
+  testInput.value = context;
+  temperature.value = 1;
+  await nextTick();
+  setPage(getPageIndex(page));
+}
+
 function syncPageFromRoute() {
   if (typeof window === "undefined") return;
   const key = window.location.hash.replace(/^#/, "");
   const index = pages.findIndex((page) => page.key === key);
-  if (index >= 0) activePageIndex.value = index;
+  if (index >= 0) { viewMode.value = "advanced"; activePageIndex.value = index; }
+  else { clearPrediction(); stopTest(); viewMode.value = "guided"; }
 }
 
 function updateRouteFromPage() {
   if (typeof window === "undefined") return;
-  const key = pages[activePageIndex.value]?.key || pages[0].key;
+  const key = viewMode.value === "guided" ? "learn" : pages[activePageIndex.value]?.key || pages[0].key;
   if (window.location.hash !== `#${key}`) {
     window.history.replaceState(null, "", `#${key}`);
   }
@@ -799,17 +828,24 @@ onUnmounted(() => {
 
 <template>
   <main class="app-shell">
-    <header class="app-header">
+    <header class="app-header" :class="{ 'guided-header': viewMode === 'guided' }">
       <div>
         <p class="eyebrow">GPT generation visualizer</p>
-        <h1>GPT visualizer</h1>
+        <h1 class="app-main-title">GPT가 글을 만드는 과정</h1>
       </div>
-      <div class="prompt-control" aria-label="프롬프트 입력">
+      <div v-if="viewMode === 'advanced'" class="prompt-control" aria-label="프롬프트 입력">
         <label for="promptInput">프롬프트</label>
         <input id="promptInput" v-model="prompt" type="text" maxlength="160" autocomplete="off" />
       </div>
     </header>
 
+    <nav class="experience-mode-nav" aria-label="학습 방식">
+      <button type="button" :class="{ active: viewMode === 'guided' }" :aria-pressed="viewMode === 'guided'" @click="showGuided">따라하며 배우기</button>
+      <button type="button" :class="{ active: viewMode === 'advanced' }" :aria-pressed="viewMode === 'advanced'" @click="openInternal('tokenize')">내부 원리 살펴보기</button>
+    </nav>
+    <GuidedLearning v-show="viewMode === 'guided'" @explore="({ page, context }) => openInternal(page, context)" />
+
+    <section v-show="viewMode === 'advanced'" aria-label="내부 원리 심화 보기">
     <section class="simulation-notice" aria-label="시뮬레이션 안내">
       <label for="predictionMode">후보 생성 방식
         <select id="predictionMode" v-model="predictionMode">
@@ -847,6 +883,13 @@ onUnmounted(() => {
       </div>
       <button class="ghost-button" type="button" @click="reset">초기화</button>
     </section>
+
+    <aside class="advanced-observation">
+      <strong>이 단계에서 관찰할 질문</strong>
+      <p>{{ observationPrompts[activePage.key].question }}</p>
+      <details :key="activePage.key"><summary>관찰한 뒤 설명 확인하기</summary><p>{{ observationPrompts[activePage.key].answer }}</p></details>
+    </aside>
+    <p v-if="activePage.key === 'output' || activePage.key === 'test'" class="advanced-boundary">여기서부터는 후보 선택을 보여 주는 별도 예시입니다. 앞에서 본 FFN 벡터를 실제 어휘 점수로 바꾸는 출력층은 생략했으며, 준비된 데모 또는 Gemini가 작성한 후보를 사용합니다. 실제 GPT의 내부 확률을 측정한 값이 아닙니다.</p>
 
     <section class="page-stage" :class="`page-stage--${activePage.key}`" aria-live="polite">
       <div class="page-heading">
@@ -1257,5 +1300,6 @@ onUnmounted(() => {
         다음
       </button>
     </div>
+    </section>
   </main>
 </template>

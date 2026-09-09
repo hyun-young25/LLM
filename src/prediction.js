@@ -1,7 +1,16 @@
+import { contexts, predictFromExamples } from "./guidedModel.js";
+
 export const DEMO_NOTE = "교육용 예시 후보입니다. 실제 GPT의 토큰이나 내부 확률을 측정한 값이 아닙니다.";
 
 export function demoPrediction(body = {}) {
   const input = String(body.userInput || body.originalInput || body.context || "");
+  const context = Object.values(contexts).find(item => item.label === input.trim().replace(/\s+/g, " "));
+  if (context) {
+    const generated = Array.isArray(body.generatedTokens) ? body.generatedTokens : [];
+    const result = predictFromExamples([...context.prefix, ...generated]);
+    const candidates = result.candidates.length ? result.candidates : [{ token: "<eos>", probability: 1 }];
+    return { source: "demo", candidates, nextToken: candidates[0].token, note: "안내형 활동과 같은 예시 문장의 빈도로 만든 후보입니다. 앞의 FFN 벡터에서 계산한 확률이나 실제 GPT의 내부 값은 아닙니다." };
+  }
   const plans = /날씨|기온/.test(input)
     ? [["실시간", "현재"], ["날씨는", "기온은"], ["기상", "날씨"], ["정보를", "예보를"], ["확인해", "살펴봐"], ["주세요.", "보세요."]]
     : /안녕|반가/.test(input)
