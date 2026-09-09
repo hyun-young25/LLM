@@ -16,17 +16,17 @@ const pages = [
   },
   {
     key: "embedding",
-    title: "Embedding",
+    title: "임베딩(Embedding)",
     label: "임베딩",
-    oneLine: "토큰 ID가 embedding table을 지나 의미를 담은 벡터가 됩니다.",
-    note: "임베딩은 ID를 벡터 공간의 좌표로 바꾸는 단계입니다. 이 화면은 이해를 위해 8, 16, 32차원만 보여주지만 실제 모델에서는 512, 768, 1536차원처럼 훨씬 큰 벡터로 확장될 수 있습니다.",
+    oneLine: "토큰 ID에 해당하는 숫자 목록을 가져와 문맥 계산을 준비합니다.",
+    note: "임베딩 벡터는 토큰에 대응하는 숫자 목록입니다. 같은 토큰 ID는 같은 기본 임베딩을 사용합니다. 실제 모델은 학습으로 이 값을 정하지만, 여기서는 고정된 예시 값을 사용하며 8·16·32개 성분을 비교할 수 있습니다.",
   },
   {
     key: "attention",
-    title: "Attention",
+    title: "어텐션(Attention)",
     label: "어텐션",
-    oneLine: "각 입력 벡터를 Q, K, V로 바꾸고 어떤 토큰을 볼지 계산합니다.",
-    note: "Query와 Key의 내적이 attention score를 만들고, softmax가 비중을 정합니다. 현재 위치보다 뒤에 있는 토큰은 가리고, 비중에 따라 Value를 섞어 문맥 벡터를 만듭니다.",
+    oneLine: "현재 토큰이 자기 위치와 앞쪽 토큰을 참고할 비중을 계산하고, 그 비중에 따라 정보를 섞습니다.",
+    note: "Q와 K를 비교해 점수를 만들고 Softmax로 합이 1인 참고 비중을 정합니다. 그 비중을 각 V에 곱해 더하면 문맥을 반영한 벡터가 됩니다. 뒤쪽 위치의 비중은 0이며, 이 비중은 다음 단어가 나올 확률이 아닙니다.",
   },
   {
     key: "ffn",
@@ -885,7 +885,7 @@ onUnmounted(() => {
       <button class="ghost-button" type="button" @click="reset">초기화</button>
     </section>
 
-    <ConceptExplainer v-if="activePage.key === 'ffn' || activePage.key === 'output'" :kind="activePage.key === 'ffn' ? 'ffn' : 'temperature'" />
+    <ConceptExplainer v-if="['embedding', 'attention', 'ffn', 'output'].includes(activePage.key)" :kind="activePage.key === 'output' ? 'temperature' : activePage.key" />
 
     <aside class="advanced-observation">
       <strong>이 단계에서 관찰할 질문</strong>
@@ -902,7 +902,7 @@ onUnmounted(() => {
           <p>{{ activePage.oneLine }}</p>
         </div>
         <div v-if="activePage.key === 'attention'" class="formula-note" aria-label="Attention 수식">
-          <span>Attention formula</span>
+          <span>계산식 · 점수를 비중으로 바꿔 정보 합산</span>
           <code>Q = XWq, K = XWk, V = XWv</code>
           <code>Attention = softmax(QK^T / sqrt(d_k) + mask)V</code>
         </div>
@@ -935,28 +935,26 @@ onUnmounted(() => {
 
       <div v-else-if="activePage.key === 'embedding'" class="lesson-scene embedding-scene">
         <div class="lookup-panel">
-          <span class="section-kicker">ID lookup</span>
+          <span class="section-kicker">토큰 ID로 숫자 목록 찾기</span>
           <label class="dimension-control" for="embeddingDimension">
-            <span>벡터 차원</span>
+            <span>숫자 개수 · 벡터 차원</span>
             <select id="embeddingDimension" v-model.number="embeddingDimension">
-              <option v-for="option in embeddingOptions" :key="option" :value="option">{{ option }}d</option>
+              <option v-for="option in embeddingOptions" :key="option" :value="option">{{ option }}개</option>
             </select>
           </label>
           <div class="lookup-row">
-            <strong>#{{ focusItem.id }}</strong>
-            <span>one-hot</span>
-            <b>·</b>
-            <span>embedding table {{ embeddingStats.tableShape }}</span>
-            <b>=</b>
-            <span>{{ embeddingStats.dimensions }}d vector</span>
+            <span>현재 마지막 토큰: {{ focusItem.token }}</span>
+            <strong>ID {{ focusItem.id }}</strong>
+            <span>이 ID에 대응하는 임베딩 표의 행을 가져옵니다.</span>
+            <span>결과: 숫자 {{ embeddingStats.dimensions }}개인 벡터</span>
           </div>
           <p class="mini-note">
-            화면에는 학습용으로 {{ embeddingStats.previewSize }}개 축만 표시합니다.
-            실제 모델은 512, 768, 1536차원처럼 더 큰 임베딩을 사용할 수 있습니다.
+            막대 하나는 숫자 성분 하나입니다. 높이는 숫자의 크기(절댓값)를 대략적으로 보여 줍니다. 정확한 값과 음수 여부는 막대 아래 숫자로 읽으세요. 차원을 바꾸면 숫자 개수가 달라집니다. 실제 모델의 차원은 모델 설계에 따라 정해집니다.
           </p>
+          <p class="mini-note">프롬프트에 ‘사과 사과 바나나’를 입력해 보세요. 두 ‘사과’의 ID와 숫자 목록이 같은지 비교하세요. 이 모형의 값은 학습된 의미가 아닌 고정 예시입니다.</p>
         </div>
         <div class="embedding-table">
-          <div v-for="row in embeddingRows" :key="`${row.token}-${row.id}`" class="embedding-row">
+          <div v-for="row in embeddingRows" :key="`${row.index}-${row.id}`" class="embedding-row">
             <div class="embedding-token">
               <strong>{{ row.token }}</strong>
               <span>#{{ row.id }}</span>
@@ -964,7 +962,7 @@ onUnmounted(() => {
             <div
               class="vector-bars"
               :style="{ '--embedding-dims': embeddingStats.dimensions }"
-              aria-label="임베딩 벡터"
+              :aria-label="`${row.token}의 임베딩 벡터, 숫자 ${embeddingStats.dimensions}개`"
             >
               <div
                 v-for="sample in row.preview"
@@ -974,7 +972,7 @@ onUnmounted(() => {
                   '--bar': `${Math.max(12, Math.abs(sample.value) * 34)}px`,
                   '--tone': sample.value >= 0 ? palette[sample.bucket % palette.length] : '#5d6b78',
                 }"
-                :title="`dim ${sample.dimensionIndex}: ${sample.value}`"
+                :title="`${sample.dimensionIndex + 1}번째 숫자: ${sample.value}`"
               >
                 <span class="vector-bar" aria-hidden="true"></span>
                 <code class="vector-value">{{ sample.value.toFixed(2) }}</code>
@@ -985,12 +983,14 @@ onUnmounted(() => {
       </div>
 
       <div v-else-if="activePage.key === 'attention'" class="lesson-scene attention-scene">
+        <p class="attention-reading">기준 토큰을 골라 보세요. 아래 막대는 <strong>‘{{ selectedAttentionItem.token }}’이 각 토큰의 정보를 참고하는 비중</strong>입니다. 선택한 위치 뒤의 토큰은 0%가 됩니다.</p>
         <div class="token-selector" aria-label="Attention 기준 토큰 선택">
           <button
             v-for="item in visibleTokens"
             :key="`select-${item.index}`"
             class="token-chip"
             :class="{ 'is-active': item.index === selectedAttentionItem.index }"
+            :aria-pressed="item.index === selectedAttentionItem.index"
             type="button"
             @click="selectAttentionToken(item.index)"
           >
@@ -1000,18 +1000,21 @@ onUnmounted(() => {
         <div class="qkv-strip">
           <div>
             <span>Q</span>
-            <small>{{ selectedAttentionItem.token }} 기준</small>
+            <small>비교 기준 · {{ selectedAttentionItem.token }}</small>
             <strong>{{ qkv.q.map((v) => v.toFixed(1)).join(" · ") }}</strong>
           </div>
           <div>
             <span>K</span>
+            <small>비교할 단서 · {{ selectedAttentionItem.token }}</small>
             <strong>{{ qkv.k.map((v) => v.toFixed(1)).join(" · ") }}</strong>
           </div>
           <div>
             <span>V</span>
+            <small>전달할 정보 · {{ selectedAttentionItem.token }}</small>
             <strong>{{ qkv.v.map((v) => v.toFixed(1)).join(" · ") }}</strong>
           </div>
         </div>
+        <p class="mini-note">위 Q·K·V는 선택한 토큰의 값입니다. 실제 비중 계산에서는 선택한 토큰의 Q와 참고할 각 토큰의 K를 비교하고, 각 토큰의 V를 섞습니다.</p>
 
         <div class="attention-layout">
           <div class="attention-list">
@@ -1019,7 +1022,7 @@ onUnmounted(() => {
               <span class="math-token">{{ row.token }}</span>
               <div class="attention-metrics">
                 <div>
-                  <small>벡터 유사도</small>
+                  <small>유사도(참고)</small>
                   <span class="bar-track">
                     <span
                       class="bar-fill relation-fill"
@@ -1029,7 +1032,7 @@ onUnmounted(() => {
                   <strong>{{ row.relation.toFixed(2) }}</strong>
                 </div>
                 <div>
-                  <small>Attention 비중</small>
+                  <small>참고 비중</small>
                   <span class="bar-track">
                     <span class="bar-fill" :style="{ '--value': `${Math.round(row.weight * 100)}%` }"></span>
                   </span>
@@ -1038,7 +1041,7 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-          <div class="attention-map" :style="{ '--token-count': visibleTokens.length }" aria-label="attention map">
+          <div class="attention-map" :style="{ '--token-count': visibleTokens.length }" aria-label="행의 토큰이 열의 토큰을 참고하는 상대 강도 지도">
             <div class="map-head"></div>
             <span v-for="item in visibleTokens" :key="`col-${item.index}`">{{ item.token }}</span>
             <template v-for="(row, rowIndex) in attentionMatrix" :key="`row-${rowIndex}`">
@@ -1052,6 +1055,24 @@ onUnmounted(() => {
             </template>
           </div>
         </div>
+        <p class="mini-note">지도는 행이 기준 토큰, 열이 참고할 토큰입니다. 색은 각 행 안의 상대 강도이므로 서로 다른 행의 색으로 확률을 비교하지 마세요. ‘유사도’는 입력 벡터끼리 비교한 별도 참고 값이며, 실제 참고 비중은 Q·K 점수로 계산합니다.</p>
+        <section class="attention-result">
+          <h3>정보를 섞어 만든 새 숫자 목록</h3>
+          <code>{{ contextVector.map(value => value.toFixed(3)).join(' · ') }}</code>
+          <p>각 토큰의 V에 참고 비중을 곱해 더한 결과입니다. 다음 피드포워드 단계에는 이 숫자 목록이 들어갑니다.</p>
+          <details class="attention-calculation">
+            <summary>첫 번째 숫자 {{ contextVector[0].toFixed(3) }}은 어떻게 나왔을까요?</summary>
+            <div class="attention-table-scroll" tabindex="0" role="region" aria-label="참고 비중과 정보 합산 계산표">
+              <table>
+                <caption>선택한 토큰 ‘{{ selectedAttentionItem.token }}’의 첫 번째 출력 성분 계산</caption>
+                <thead><tr><th scope="col">참고할 토큰</th><th scope="col">V의 첫 번째 숫자</th><th scope="col">참고 비중</th><th scope="col">숫자 × 비중</th></tr></thead>
+                <tbody><tr v-for="row in attentionRows" :key="row.index"><th scope="row">{{ row.index + 1 }}. {{ row.token }}<small v-if="row.index > selectedAttentionItem.index">뒤쪽 위치 · 차단</small></th><td>{{ row.value[0].toFixed(2) }}</td><td>{{ row.weight.toFixed(3) }}</td><td>{{ (row.value[0] * row.weight).toFixed(3) }}</td></tr></tbody>
+                <tfoot><tr><th scope="row" colspan="2">합계</th><td>{{ attentionRows.reduce((sum, row) => sum + row.weight, 0).toFixed(3) }}</td><td>{{ contextVector[0].toFixed(3) }}</td></tr></tfoot>
+              </table>
+            </div>
+            <p>마지막 열을 더하면 첫 번째 출력 숫자가 됩니다. 나머지 성분도 같은 방식으로 계산합니다. 표의 숫자는 반올림되어 표시 값의 합이 조금 다를 수 있습니다.</p>
+          </details>
+        </section>
       </div>
 
       <div v-else-if="activePage.key === 'ffn'" class="lesson-scene ffn-scene">

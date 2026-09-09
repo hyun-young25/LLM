@@ -414,6 +414,26 @@ code {
   gap: 10px;
 }
 
+.embedding-scene .mini-note,
+.attention-scene .mini-note { font-size: .875rem; line-height: 1.7; }
+.attention-reading { margin: 0 0 14px; line-height: 1.7; }
+.attention-scene .qkv-strip small { font-size: .875rem; line-height: 1.6; }
+.attention-result { margin-top: 20px; padding: clamp(16px, 3vw, 24px); border: 1px solid #c8dfe3; border-radius: 12px; background: #f4fafb; }
+.attention-result h3 { margin: 0 0 10px; font-size: 1.0625rem; }
+.attention-result > code { display: block; font-size: 1rem; line-height: 1.8; overflow-wrap: anywhere; }
+.attention-result p { margin: 12px 0 0; font-size: .9375rem; line-height: 1.7; }
+.attention-calculation { margin-top: 14px; }
+.attention-calculation summary { cursor: pointer; padding: 10px 0; font-size: 1rem; font-weight: 800; }
+.attention-calculation summary:focus-visible,
+.attention-table-scroll:focus-visible { outline: 3px solid #12657a; outline-offset: 3px; }
+.attention-table-scroll { max-width: 100%; overflow-x: auto; }
+.attention-table-scroll table { width: 100%; min-width: 480px; border-collapse: collapse; background: #fff; font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.attention-table-scroll caption { text-align: left; padding: 8px 0; font-size: .875rem; line-height: 1.7; }
+.attention-table-scroll th, .attention-table-scroll td { padding: 12px; border-bottom: 1px solid #d4e3e7; text-align: right; }
+.attention-table-scroll th:first-child { text-align: left; }
+.attention-table-scroll th small { display: block; font-size: .875rem; font-weight: 400; }
+.attention-table-scroll tfoot { background: #e7f2f4; font-weight: 800; }
+
 .embedding-row {
   display: grid;
   grid-template-columns: 118px minmax(0, 1fr);
