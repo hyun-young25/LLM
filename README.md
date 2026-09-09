@@ -1,0 +1,81 @@
+# GPT 텍스트 생성 원리 시각화
+
+Vue 3와 Vite로 만든 한국어 수업용 웹앱입니다. 토큰화 → 임베딩 → 인과적 Attention → FFN → 후보 샘플링 → 반복 생성을 체험합니다.
+
+## 바로 실행하기
+
+Node.js 22 이상이 필요합니다.
+
+```bash
+npm ci
+npm run dev
+```
+
+기본값은 **교육용 데모**입니다. API 키와 외부 AI 호출 없이 여섯 단계가 모두 작동합니다. 날씨·인사·일반 입력에 대해 준비된 예시 후보를 사용하므로 임의의 질문에 답하는 챗봇은 아닙니다.
+
+- **최종 출력:** 예측 → Temperature 변경 → 문맥에 추가로 한 단계씩 확인합니다.
+- **테스트:** 입력 후 테스트를 누르면 최대 10회 반복하며 답변을 만듭니다. 중지하거나 초기화할 수 있습니다.
+- **Attention:** 토큰을 선택해 비중을 비교합니다. 선택한 위치 뒤의 토큰은 차단됩니다.
+- **초기화:** 진행 중 요청과 애니메이션을 취소하고 생성 결과를 지웁니다.
+
+## GitHub에 올리기
+
+이 폴더 안의 파일을 저장소 루트에 올립니다. `transfer_package` 폴더 전체를 한 단계 아래에 중첩하지 마세요.
+
+소스 파일, `package.json`, `package-lock.json`, `index.html`, `vite.config.js`, `server.mjs`, `geminiProxy.js`, `tests/`, `.github/workflows/pages.yml`, `.gitignore`, `.env.example`를 포함합니다. 실제 `.env`, `node_modules/`, 빌드 결과 `dist/`는 소스 저장소에 올리지 않습니다.
+
+### GitHub Pages
+
+1. 저장소 **Settings → Pages → Build and deployment → Source**를 **GitHub Actions**로 설정합니다.
+2. `main` 브랜치에 코드를 올립니다. 브랜치 이름이 다르면 `.github/workflows/pages.yml`의 `branches`를 맞춥니다.
+3. **Actions → Build and deploy GitHub Pages**가 성공하면 배포 URL을 엽니다.
+
+워크플로는 테스트 → 빌드 → Pages 배포를 실행합니다. 이미 코드를 올린 후 Pages를 켰다면 해당 워크플로의 **Run workflow**로 다시 실행합니다. 상대경로 빌드로 `/저장소이름/` 아래에서도 JS와 CSS가 로드됩니다.
+
+GitHub Pages에서는 **교육용 데모**를 제공합니다. Node 서버와 비밀 API 키가 필요한 Gemini 호출은 정적 Pages에서 실행할 수 없습니다. 설정 기준: [Vite 공식 배포 안내](https://vite.dev/guide/static-deploy).
+
+## Gemini 후보 생성 사용하기
+
+선택 기능이며 데모와 분리되어 있습니다. 모델이 작성한 후보와 추정 확률을 보여줍니다. 실제 GPT의 내부 토큰 확률을 조회하는 기능이 아닙니다.
+
+`.env.example`을 `.env`로 복사한 후 **서버 환경에만** 키를 설정합니다.
+
+```dotenv
+GEMINI_API_KEY=실제_키
+GEMINI_MODEL=gemini-2.5-flash-lite
+VITE_ENABLE_GEMINI=true
+```
+
+개발 중에는 `npm run dev`를 실행하고 화면의 후보 생성 방식을 Gemini로 변경합니다. 빌드한 앱과 API를 함께 실행하려면:
+
+```bash
+npm run build
+npm start
+```
+
+기본 주소는 `http://127.0.0.1:3000`입니다. 포트는 `PORT`, 수신 주소는 `HOST`로 지정합니다. 이 서버는 로컬 수업용 기본 구성입니다. 외부 공개 서버에 올릴 경우 운영 환경의 접근 제한과 API 사용량 제한을 적용하세요.
+
+- `GEMINI_API_KEY`를 `VITE_`로 시작하는 변수에 넣지 마세요. `VITE_` 변수는 브라우저 코드에 포함됩니다.
+- API 키 누락·실패·시간 초과는 화면에 표시합니다. 실패한 실제 호출을 데모 결과로 바꿔 표시하지 않습니다.
+- 후보를 작성할 때의 Gemini Temperature는 고정하고, 수업용 Temperature는 클라이언트 확률에 한 번 적용합니다.
+- Gemini 기능은 서버 설정과 모델 이용 가능 여부에 따라 작동합니다. 참고: [Gemini 모델](https://ai.google.dev/gemini-api/docs/models), [구조화된 출력](https://ai.google.dev/gemini-api/docs/structured-output).
+
+## 교육용 계산의 범위
+
+- 토큰 분할과 ID는 설명용 규칙·해시이며 실제 GPT 토크나이저가 아닙니다.
+- 임베딩은 고정된 예시 값입니다. 같은 토큰은 같은 값을 가지며, Attention과 FFN에서는 첫 4개 성분을 사용합니다.
+- Attention은 미래 토큰을 마스킹한 scaled dot-product와 Softmax로 계산합니다. 지도 색은 각 행 최댓값 대비 상대 강도이며, 막대는 실제 예시 계산 비중입니다.
+- FFN은 위치마다 같은 고정 가중치로 행렬곱·ReLU·행렬곱을 수행합니다. 그림에는 은닉 노드를 최대 8개만 표시하지만 선택한 전체 차원을 계산합니다.
+- 최종 후보는 데모 또는 Gemini가 별도로 제공합니다. 화면의 FFN 출력으로 후보 확률을 계산한 것이 아닙니다.
+- 실제 모델의 학습, 위치 정보, 다중 헤드, 잔차 연결, 정규화, 전체 어휘 출력층은 생략합니다.
+
+계산식은 `math_logic.md`에 정리했습니다.
+
+## 검증
+
+```bash
+npm test
+npm run build
+```
+
+확률 정규화, 저온 샘플링 수치 안정성, 0 확률 제외, 인과 마스킹, FFN 차원 유지, 데모 종료, 요청 취소, 서버 응답을 확인합니다. 브라우저 화면 검사와 실제 Gemini 응답은 이 검증에 포함되지 않습니다.
