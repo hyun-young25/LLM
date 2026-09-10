@@ -12,7 +12,7 @@ import { createClassroomClient } from '../src/classroomClient.js';
 const fixture = async () => {
   const dir=await mkdtemp(join(tmpdir(),'gpt-classroom-'));
   await writeFile(join(dir,'index.html'),'<h1>Classroom</h1>');
-  const env={CLASSROOM_ENABLED:'true',ADMIN_PASSWORD:'test-admin-password-42',CLASSROOM_JOIN_CODE:'test-course-42',CLASSROOM_DB_PATH:join(dir,'classroom.sqlite')};
+  const env={CLASSROOM_ENABLED:'true',ADMIN_PASSWORD:'test-admin-password-42',CLASSROOM_DB_PATH:join(dir,'classroom.sqlite')};
   if(process.env.CLASSROOM_TEST_DATABASE_URL) {
     const url=new URL(process.env.CLASSROOM_TEST_DATABASE_URL);
     if(url.pathname!=='/gpt_classroom_test'||!['localhost','127.0.0.1'].includes(url.hostname)) throw new Error('Only the isolated local test database can be reset.');
@@ -28,11 +28,11 @@ const fixture = async () => {
   async function call(path,body,cookie='',headers={}) {const res=await fetch(origin+'/api/classroom'+path,{method:body===undefined?'GET':'POST',headers:{...(body===undefined?{}:{'Content-Type':'application/json','X-Classroom-Request':'1'}),...(cookie?{Cookie:cookie}:{}),...headers},...(body===undefined?{}:{body:JSON.stringify(body)})});const text=await res.text();let data;try{data=JSON.parse(text);}catch{data=text;}return {status:res.status,data,cookie:res.headers.get('set-cookie')?.split(';')[0],headers:res.headers};}
   const admin=await call('/admin-login',{login:'instructor',password:env.ADMIN_PASSWORD});assert.equal(admin.status,200);
   await call('/admin/roster',{students:[{studentId:'20260001',name:'테스트 하나'},{studentId:'20260002',name:'테스트 둘'}]},admin.cookie);
-  const credentials={name:'테스트 하나',studentId:'20260001',password:'student-password-42',joinCode:env.CLASSROOM_JOIN_CODE};
-  const student=await call('/activate',credentials);assert.equal(student.status,200);
+  const credentials={name:'테스트 하나',studentId:'20260001'};
+  const student=await call('/login',credentials);assert.equal(student.status,200);
   return {call,admin,student,credentials,env,stop,start,async close(){await stop();await rm(dir,{recursive:true,force:true});}};
 };
-test('classroom enforces server roles, roster identity, cookie flags and cross-site protection',async()=>{
+test('classroom keeps administrator authentication, student isolation, cookie flags and cross-site protection',async()=>{
   const f=await fixture();try{
     assert.match(f.student.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);
     assert.equal((await f.call('/admin/students')).status,401);
@@ -40,13 +40,39 @@ test('classroom enforces server roles, roster identity, cookie flags and cross-s
     assert.equal((await f.call('/admin/export',undefined,f.student.cookie)).status,403);
     assert.equal((await f.call('/admin/export-details',undefined,f.student.cookie)).status,403);
     assert.equal((await f.call('/progress?userId='+f.admin.data.user.id,undefined,f.student.cookie)).data.summary.id,f.student.data.user.id);
-    assert.equal((await f.call('/login',{...f.credentials,password:'wrong-password'})).status,401);
-    assert.equal((await f.call('/activate',{...f.credentials,name:'다른 이름',studentId:'20260002'})).status,400);
-    assert.equal((await f.call('/activate',{...f.credentials,studentId:'20999999'})).status,400);
+    assert.equal((await f.call('/admin-login',{login:'instructor',password:'wrong-password'})).status,401);
+    assert.equal((await f.call('/admin-login',{login:'instructor'})).status,400);
+    assert.equal((await f.call('/admin-login',{login:f.credentials.studentId,password:f.env.ADMIN_PASSWORD})).status,401);
+    assert.equal((await f.call('/login',{name:'관리자',studentId:'instructor',role:'admin'})).status,401);
+    assert.equal((await f.call('/login',{...f.credentials,name:'다른 이름'})).status,401);
+    const legacy=await f.call('/activate',{...f.credentials,password:'old-unused-password',joinCode:'old-unused-code'});
+    assert.equal(legacy.status,200);assert.equal(legacy.data.user.id,f.student.data.user.id);
+    assert.equal((await f.call('/login',f.credentials,'',{'Origin':'https://unrelated.invalid'})).status,403);
     assert.equal((await f.call('/logout',{},f.student.cookie,{'Origin':'https://unrelated.invalid'})).status,403);
     assert.equal((await f.call('/logout',{},f.student.cookie,{'X-Classroom-Request':''})).status,403);
     assert.equal((await f.call('/logout',{},f.student.cookie)).status,200);
     assert.equal((await f.call('/progress',undefined,f.student.cookie)).status,401);
+  }finally{await f.close();}
+});
+test('name and student ID entry creates one student without a roster and preserves existing identities',async()=>{
+  const f=await fixture();try{
+    assert.equal((await f.call('/health')).data.studentLogin,'name-id');
+    const identity={name:' 자동 등록 학생 ',studentId:' 20260003 ',role:'admin'};
+    const [first,second]=await Promise.all([f.call('/login',identity),f.call('/login',identity)]);
+    assert.equal(first.status,200);assert.equal(second.status,200);
+    assert.equal(first.data.user.id,second.data.user.id);assert.equal(first.data.user.role,'student');
+    assert.equal(first.data.user.name,'자동 등록 학생');assert.equal(first.data.user.studentId,'20260003');
+    assert.equal((await f.call('/login',{name:'바뀐 이름',studentId:'20260003'})).status,401);
+    const bad=[{name:'',studentId:'20260004'},{name:'학생',studentId:''},{name:'학생',studentId:20260004},{name:['학생'],studentId:'20260004'},{name:'학생\n다른 줄',studentId:'20260004'},{name:'학생',studentId:'../20260004'}];
+    for(const entry of bad)assert.equal((await f.call('/login',entry)).status,400);
+    const roster=await f.call('/admin/roster',{students:[{name:'자동 등록 학생',studentId:'20260003'}]},f.admin.cookie);
+    assert.equal(roster.status,200);assert.equal(roster.data.added,0);
+    const listing=(await f.call('/admin/students',undefined,f.admin.cookie)).data;
+    assert.equal(listing.students.length,3);assert.equal(Object.hasOwn(listing,'joinCode'),false);
+    const saved=listing.students.find(s=>s.studentId==='20260003');
+    assert.equal(saved.id,first.data.user.id);assert.equal(saved.name,'자동 등록 학생');assert.equal(saved.activated,true);
+    assert.equal(listing.students.find(s=>s.studentId==='20260002').activated,false);
+    assert.equal((await f.call('/admin/students',undefined,first.cookie)).status,403);
   }finally{await f.close();}
 });
 test('server grades immutable first/latest answers, deduplicates retries, rejects conflicts and persists after restart',async()=>{

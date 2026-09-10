@@ -4,8 +4,8 @@ import App from './App.vue';
 import AdminDashboard from './AdminDashboard.vue';
 import { classroomKey, createClassroomClient, classroomApi } from './classroomClient.js';
 const classroom=createClassroomClient(); provide(classroomKey,classroom);
-const checking=ref(true), unavailable=ref(false), busy=ref(false), error=ref(''), panel=ref(location.hash==='#admin'?'admin':'student'), showLogin=ref(location.hash==='#login'), activation=ref(false);
-const form=ref({name:'',studentId:'',password:'',joinCode:'',login:'instructor'});
+const checking=ref(true), unavailable=ref(false), busy=ref(false), error=ref(''), panel=ref(location.hash==='#admin'?'admin':'student'), showLogin=ref(location.hash==='#login');
+const form=ref({name:'',studentId:'',password:'',login:'instructor'});
 const remoteUrl=import.meta.env.VITE_CLASSROOM_URL || '';
 const validRemote=computed(()=>{try { const url=new URL(remoteUrl); return url.protocol==='https:' ? url.origin : ''; } catch { return ''; }});
 const isAdmin=computed(()=>panel.value==='admin');
@@ -23,7 +23,7 @@ async function check() {
 }
 async function login() {
   busy.value=true; error.value='';
-  try { const result=await classroomApi(isAdmin.value?'/admin-login':activation.value?'/activate':'/login',form.value); await restore(result.user); form.value.password=''; form.value.joinCode=''; showLogin.value=false; location.hash=result.user.role==='admin'?'admin':'learn'; }
+  try { const credentials=isAdmin.value?{login:form.value.login,password:form.value.password}:{name:form.value.name,studentId:form.value.studentId}; const result=await classroomApi(isAdmin.value?'/admin-login':'/login',credentials); await restore(result.user); form.value.password=''; showLogin.value=false; location.hash=result.user.role==='admin'?'admin':'learn'; }
   catch(e) { error.value=e.message; } finally { busy.value=false; }
 }
 async function logout() {
@@ -46,16 +46,14 @@ onUnmounted(()=>{classroom.dispose(); window.removeEventListener('hashchange',ro
       <div v-if="classroom.user?.role==='student'" class="classroom-save" :class="{failed:classroom.error}" role="status"><span>{{ statusText }}</span><small v-if="classroom.updatedAt">최근 저장 {{ new Date(classroom.updatedAt).toLocaleTimeString('ko-KR') }}</small><button v-if="classroom.status==='error'" @click="classroom.flush">저장 다시 시도</button><button v-if="classroom.status==='conflict'" @click="reload">최신 기록 불러오기</button><p v-if="classroom.error">{{ classroom.error }} 이 화면을 닫지 말고 저장 상태를 확인하세요.</p></div>
       <p v-if="error && !needsLogin" class="classroom-error" role="alert">{{ error }}</p>
       <section v-if="needsLogin" class="classroom-login">
-        <p class="classroom-kicker">{{ isAdmin?'INSTRUCTOR':'STUDENT' }}</p><h1>{{ isAdmin?'학습 기록 관리':activation?'첫 수업 참여 등록':'학생 로그인' }}</h1>
+        <p class="classroom-kicker">{{ isAdmin?'INSTRUCTOR':'STUDENT' }}</p><h1>{{ isAdmin?'학습 기록 관리':'학생 로그인' }}</h1>
         <template v-if="unavailable"><p>현재 주소에서는 학생 기록 서버에 연결할 수 없습니다. 기록 저장은 로그인된 학습실에서만 가능합니다.</p><a v-if="validRemote" class="classroom-primary" :href="validRemote + (isAdmin?'/#admin':'/#login')">{{ isAdmin?'관리자 학습실 열기':'기록되는 학습실 열기' }}</a><template v-else><p>기록 기능을 준비 중입니다. 담당 교수자에게 수업용 접속 주소를 확인해 주세요.</p><button class="classroom-secondary" @click="check">연결 다시 확인</button></template><a href="#learn">공개 체험으로 돌아가기 · 기록 안 됨</a></template>
         <form v-else @submit.prevent="login">
-          <p>{{ isAdmin?'관리자 계정으로 학생의 참여 현황과 응답 기록을 확인합니다.':'이름·학번·학습 활동·문항 응답·서술 내용이 저장되며 담당 교수가 확인할 수 있습니다.' }}</p>
+          <p>{{ isAdmin?'관리자 계정으로 학생의 참여 현황과 응답 기록을 확인합니다.':'본인의 이름과 학번을 입력하면 바로 시작합니다. 이름·학번·학습 활동·문항 응답·서술 내용이 저장되며 담당 교수가 확인할 수 있습니다.' }}</p>
           <label v-if="isAdmin">관리자 아이디<input v-model="form.login" autocomplete="username" required maxlength="60" /></label>
-          <template v-else><label>이름<input v-model="form.name" autocomplete="name" required maxlength="60" /></label><label>학번<input v-model="form.studentId" autocomplete="username" required maxlength="30" /></label></template>
-          <label>비밀번호<input v-model="form.password" type="password" :autocomplete="activation?'new-password':'current-password'" :minlength="activation?10:undefined" maxlength="128" required /><small v-if="activation">다시 로그인할 때 사용할 10자 이상의 비밀번호</small></label>
-          <label v-if="activation && !isAdmin">수업 참여 코드<input v-model="form.joinCode" autocomplete="off" required maxlength="100" /><small>교수자가 등록한 명단의 이름·학번과 참여 코드가 필요합니다.</small></label>
-          <p v-if="error" class="classroom-error" role="alert">{{ error }}</p><button class="classroom-primary" :disabled="busy">{{ busy?'확인 중…':activation&&!isAdmin?'등록하고 학습 시작':'로그인' }}</button>
-          <button v-if="!isAdmin" type="button" class="classroom-text" @click="activation=!activation;error=''">{{ activation?'이미 등록했어요 · 로그인':'처음 참여하나요? · 비밀번호 등록' }}</button>
+          <template v-else><label>이름<input v-model="form.name" autocomplete="name" required maxlength="60" /></label><label>학번<input v-model="form.studentId" autocomplete="username" required minlength="3" maxlength="30" /><small>같은 이름·학번으로 다시 들어오면 이전 학습을 이어갑니다.</small></label></template>
+          <label v-if="isAdmin">비밀번호<input v-model="form.password" type="password" autocomplete="current-password" maxlength="128" required /></label>
+          <p v-if="error" class="classroom-error" role="alert">{{ error }}</p><button class="classroom-primary" :disabled="busy">{{ busy?'확인 중…':isAdmin?'관리자 로그인':'학습 시작' }}</button>
         </form>
       </section>
       <AdminDashboard v-else-if="isAdmin && classroom.user?.role==='admin'" />

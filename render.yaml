@@ -28,8 +28,6 @@ services:
         value: instructor
       - key: ADMIN_PASSWORD
         generateValue: true
-      - key: CLASSROOM_JOIN_CODE
-        generateValue: true
       - key: VITE_ENABLE_GEMINI
         value: "false"
 databases:

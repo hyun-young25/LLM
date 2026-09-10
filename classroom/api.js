@@ -7,11 +7,17 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 const now = () => new Date().toISOString();
 const safeUser = u => ({ id: u.id, studentId: u.student_id, name: u.name, role: u.role });
 const validPassword = p => typeof p === 'string' && p.length >= 10 && p.length <= 128;
+function studentIdentity(body) {
+  const studentId = typeof body?.studentId === 'string' ? body.studentId.trim() : '';
+  const name = typeof body?.name === 'string' ? body.name.trim() : '';
+  if (!/^[-A-Za-z0-9]{3,30}$/.test(studentId) || !name || name.length > 60 || /[\x00-\x1f\x7f]/.test(name)) throw fail(400, '학번은 영문·숫자·하이픈 3~30자, 이름은 1~60자로 입력하세요.');
+  return { studentId, name };
+}
 const kinds = new Set(['activity', 'reveal', 'compare', 'sample', 'generation', 'relationship', 'reflection', 'answer', 'restart', 'advanced']);
 export function createClassroom(env) {
   const enabled = env.CLASSROOM_ENABLED === 'true';
   if (!enabled) return { enabled: false, close() {}, async handle(req, res) { reply(res, 503, { error: '학습 기록 서버가 아직 연결되지 않았습니다.' }); } };
-  if (!validPassword(env.ADMIN_PASSWORD) || !env.CLASSROOM_JOIN_CODE || env.CLASSROOM_JOIN_CODE.length < 8) throw new Error('ADMIN_PASSWORD(10자 이상)와 CLASSROOM_JOIN_CODE(8자 이상)를 서버에 설정하세요.');
+  if (!validPassword(env.ADMIN_PASSWORD)) throw new Error('ADMIN_PASSWORD(10자 이상)를 서버에 설정하세요.');
   if (env.NODE_ENV === 'production' && !env.DATABASE_URL && !env.CLASSROOM_DB_PATH) throw new Error('운영 기록 데이터베이스 연결을 설정하세요.');
   const db = env.DATABASE_URL ? openPostgresStore(env.DATABASE_URL) : adaptSqlite(openStore(env.CLASSROOM_DB_PATH || resolve('data/classroom.sqlite')));
   const secure = env.NODE_ENV === 'production';
@@ -60,7 +66,7 @@ export function createClassroom(env) {
     const p = (await progress(u.id)); const rows = (await events(u.id));
     const attempts = rows.filter(e => e.kind === 'answer').map(e => ({ ...e.payload, at: e.at }));
     const summary = summarize(p.state, attempts);
-    const basic = { ...safeUser(u), activated: !!u.password_hash, lastLogin: u.last_login, updatedAt: p.updatedAt, eventCount: rows.length, completed: summary.completed, answered: summary.answered, correct: summary.correct, firstCorrect: summary.firstCorrect, total: summary.total };
+    const basic = { ...safeUser(u), activated: !!u.last_login, lastLogin: u.last_login, updatedAt: p.updatedAt, eventCount: rows.length, completed: summary.completed, answered: summary.answered, correct: summary.correct, firstCorrect: summary.firstCorrect, total: summary.total };
     return details ? { ...basic, ...summary, events: rows, version: LESSON_VERSION } : basic;
   }
   async function handle(req, res) {
@@ -79,26 +85,34 @@ export function createClassroom(env) {
           if (req.headers.origin !== expected) throw fail(403, '요청 주소가 올바르지 않습니다.');
         }
       }
-      if (route === '/health' && req.method === 'GET') { (await db.prepare('SELECT 1').get()); return reply(res, 200, { enabled: true, version: LESSON_VERSION }); }
+      if (route === '/health' && req.method === 'GET') { (await db.prepare('SELECT 1').get()); return reply(res, 200, { enabled: true, version: LESSON_VERSION, studentLogin: 'name-id' }); }
       if (route === '/session' && req.method === 'GET') { const u = (await session(req)); return reply(res, 200, { user: u ? safeUser(u) : null, version: LESSON_VERSION }); }
       if (['/login', '/activate', '/admin-login'].includes(route) && req.method === 'POST') {
         const body = await readBody(req, 4096);
-        (await limit('auth-global', 600)); (await limit('auth:' + String(body.studentId || body.login || '').slice(0,40)));
-        const login = route === '/admin-login' ? body.login : body.studentId;
-        const u = typeof login === 'string' ? (await db.prepare('SELECT * FROM users WHERE student_id=?').get(login.trim())) : null;
-        if (typeof body.password !== 'string' || body.password.length > 128) throw fail(400, '로그인 정보를 확인해 주세요.');
-        const identityMatches = u && (route === '/admin-login' ? u.role === 'admin' : u.role === 'student' && u.name === body.name?.trim());
-        if (route === '/activate') {
-          if (!identityMatches || u.password_hash || body.joinCode !== env.CLASSROOM_JOIN_CODE || !validPassword(body.password)) {
-            await verifyPassword(body.password, null);
-            throw fail(400, '명단의 이름·학번, 수업 참여 코드와 비밀번호(10자 이상)를 확인하세요. 이미 등록했다면 로그인하세요.');
-          }
-          const hashed = await hashPassword(body.password);
-          const update = (await db.prepare('UPDATE users SET password_hash=? WHERE id=? AND password_hash IS NULL').run(hashed, u.id));
-          if (!update.changes) throw fail(409, '이미 등록된 계정입니다. 로그인해 주세요.');
-        } else {
+        await limit('auth-global', 600);
+        let u;
+        if (route === '/admin-login') {
+          const login = typeof body.login === 'string' ? body.login.trim() : '';
+          await limit('auth:admin:' + login.slice(0,60));
+          if (typeof body.password !== 'string' || body.password.length > 128 || !login || login.length > 60) throw fail(400, '관리자 로그인 정보를 확인해 주세요.');
+          u = await db.prepare("SELECT * FROM users WHERE student_id=? AND role='admin'").get(login);
           const matches = await verifyPassword(body.password, u?.password_hash);
-          if (!identityMatches || !matches) throw fail(401, '이름·학번 또는 비밀번호가 일치하지 않습니다.');
+          if (!u || !matches) throw fail(401, '관리자 아이디 또는 비밀번호가 일치하지 않습니다.');
+        } else {
+          // Name/ID entry is a classroom convenience, not verified student identity.
+          // /activate remains an alias for cached versions of the old student form.
+          const entry = studentIdentity(body);
+          await limit('auth:student:' + entry.studentId);
+          await db.exec('BEGIN IMMEDIATE');
+          try {
+            u = await db.prepare('SELECT * FROM users WHERE student_id=?').get(entry.studentId);
+            if (u && (u.role !== 'student' || u.name !== entry.name)) throw fail(401, '입력한 이름과 학번이 등록된 정보와 다릅니다. 확인 후 담당 교수자에게 문의하세요.');
+            if (!u) {
+              u = { id: randomUUID(), student_id: entry.studentId, name: entry.name, role: 'student' };
+              await db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(u.id,u.student_id,u.name,'student',null,now(),null);
+            }
+            await db.exec('COMMIT');
+          } catch (error) { if (db.isTransaction) await db.exec('ROLLBACK'); throw error; }
         }
         (await setSession(res, u)); return reply(res, 200, { user: safeUser(u) });
       }
@@ -145,7 +159,7 @@ export function createClassroom(env) {
       if (route === '/admin/students' && req.method === 'GET') {
         const students = (await db.prepare("SELECT * FROM users WHERE role='student' ORDER BY student_id").all());
         const reports=[]; for(const student of students) reports.push((await report(student)));
-        return reply(res, 200, { students: reports, joinCode: env.CLASSROOM_JOIN_CODE, storageNotice: env.CLASSROOM_STORAGE_NOTICE || '', expiresAt: env.CLASSROOM_EXPIRES_AT || null });
+        return reply(res, 200, { students: reports, studentLogin: 'name-id', storageNotice: env.CLASSROOM_STORAGE_NOTICE || '', expiresAt: env.CLASSROOM_EXPIRES_AT || null });
       }
       const detail = route.match(/^\/admin\/students\/([\w-]+)$/);
       if (detail && req.method === 'GET') {
@@ -156,8 +170,7 @@ export function createClassroom(env) {
       if (route === '/admin/roster' && req.method === 'POST') {
         const { students } = await readBody(req, 100000);
         if (!Array.isArray(students) || students.length < 1 || students.length > 1000) throw fail(400, '한 번에 1~1000명을 등록하세요.');
-        const entries = students.map(s=>({studentId: String(s.studentId || '').trim(), name: String(s.name || '').trim()}));
-        if (entries.some(s=>!/^[-A-Za-z0-9]{3,30}$/.test(s.studentId) || s.name.length < 1 || s.name.length > 60 || /[\r\n\t]/.test(s.name))) throw fail(400, '학번은 영문·숫자·하이픈 3~30자, 이름은 1~60자로 입력하세요.');
+        const entries = students.map(studentIdentity);
         if (new Set(entries.map(s=>s.studentId)).size !== entries.length) throw fail(400, '입력한 명단에 중복 학번이 있습니다.');
         let added = 0; (await db.exec('BEGIN IMMEDIATE'));
         try {
