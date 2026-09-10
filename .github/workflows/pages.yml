@@ -40,7 +40,7 @@ jobs:
       - run: npm run build
         env:
           VITE_ENABLE_GEMINI: 'false'
-          VITE_CLASSROOM_URL: ${{ vars.CLASSROOM_URL }}
+          VITE_CLASSROOM_URL: ${{ vars.CLASSROOM_URL || 'https://gpt-learning-classroom.onrender.com' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

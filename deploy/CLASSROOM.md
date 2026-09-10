@@ -16,7 +16,17 @@
 4. 배포 주소의 `/#admin`에서 `instructor`와 관리자 비밀번호로 로그인합니다. 명단(학번,이름)을 등록합니다. 동일 명단은 기존 기록을 유지하며 다른 이름과 충돌하면 명단 전체를 취소합니다.
 5. 학생은 수업용 주소에서 이름·학번·참여 코드와 본인이 정한 10자 이상의 비밀번호로 첫 등록합니다. 이후 이름·학번·비밀번호로 로그인합니다.
 6. 데이터베이스의 실제 만료일을 `CLASSROOM_EXPIRES_AT`에 ISO 날짜로 설정하면 관리자 화면에 표시됩니다. 만료일을 추측하지 말고 생성된 자원의 정보를 확인합니다.
-7. GitHub Actions 변수 `CLASSROOM_URL`에 HTTPS 배포 주소를 설정하고 Pages 워크플로를 실행하면 기존 Pages에도 수업용 학습실 링크가 표시됩니다.
+7. 기존 Pages의 수업용 학습실 링크는 `https://gpt-learning-classroom.onrender.com`을 기본으로 사용합니다. 주소를 변경하면 GitHub Actions 변수 `CLASSROOM_URL`에 새 HTTPS 배포 주소를 설정하고 Pages 워크플로를 실행합니다.
+
+### 생성된 학습실의 마지막 연결 설정
+
+무료 웹 서비스 `gpt-learning-classroom`과 무료 Postgres `gpt-learning-records`는 생성되어 있습니다. 새 Blueprint로 중복 생성하지 마세요. 현재 기록 기능은 데이터베이스 연결을 마칠 때까지 비활성화되어 있습니다.
+
+1. Render에서 `gpt-learning-records`의 **Connect → Internal Database URL**을 복사합니다.
+2. `gpt-learning-classroom`의 **Environment**에서 `DATABASE_URL`에 해당 값을 추가하고, `CLASSROOM_ENABLED`를 `true`로 변경한 뒤 저장·재배포합니다. 연결 주소는 비밀번호를 포함하므로 저장소에 넣지 않습니다.
+3. 배포가 끝나면 `/api/classroom/health`가 `enabled: true`를 반환하는지 확인합니다. 관리자 주소는 `https://gpt-learning-classroom.onrender.com/#admin`입니다. 아이디는 `instructor`, 비밀번호는 웹 서비스의 비밀 환경변수 `ADMIN_PASSWORD` 값입니다.
+
+현재 데이터베이스의 만료 시각은 **2026-10-10T17:17:49Z (한국 시간 2026년 10월 11일 02:17)**입니다. 만료 전에 관리자 화면에서 기록을 내려받으세요.
 
 `PUBLIC_ORIGIN`은 선택 사항입니다. 설정하면 배포 주소의 origin과 정확히 일치해야 합니다. 미설정 시 Render의 `RENDER_EXTERNAL_URL`을 사용합니다.
 
