@@ -1,6 +1,8 @@
 # 학생 기록 학습실 배포와 운영
 
-기존 GitHub Pages는 기록하지 않는 공개 체험으로 유지합니다. 로그인·학습 기록·관리자 페이지는 같은 Vue 화면과 Node 서버를 한 주소에서 제공합니다. 학생 이름·학번·응답·비밀번호·데이터베이스를 GitHub에 커밋하지 마세요.
+기존 QR의 GitHub Pages 기본 주소 `https://hyun-young25.github.io/LLM/`는 학생 로그인 `https://gpt-learning-classroom.onrender.com/#login`으로 자동 이동합니다. QR을 다시 만들 필요가 없습니다. 로그인·학습 기록·관리자 페이지는 같은 Vue 화면과 Node 서버를 한 주소에서 제공합니다. 학생 이름·학번·응답·비밀번호·데이터베이스를 GitHub에 커밋하지 마세요.
+
+자동 이동은 해당 GitHub Pages의 기본 주소에만 적용합니다. 기존 `#admin`, `#login`, `#learn` 및 심화 단계 주소는 유지하며, 공개 체험은 `https://hyun-young25.github.io/LLM/#learn`에서 계속 사용할 수 있습니다. `https://hyun-young25.github.io/LLM/worksheet.html` 학습지도 그대로 열립니다. Render 학습실, 관리자 주소와 기록 API에는 자동 이동을 적용하지 않습니다.
 
 ## Render 무료 배포
 
@@ -16,7 +18,7 @@
 4. 배포 주소의 `/#admin`에서 `instructor`와 관리자 비밀번호로 로그인합니다. 명단(학번,이름)을 등록합니다. 동일 명단은 기존 기록을 유지하며 다른 이름과 충돌하면 명단 전체를 취소합니다.
 5. 학생은 수업용 주소에서 이름·학번·참여 코드와 본인이 정한 10자 이상의 비밀번호로 첫 등록합니다. 이후 이름·학번·비밀번호로 로그인합니다.
 6. 데이터베이스의 실제 만료일을 `CLASSROOM_EXPIRES_AT`에 ISO 날짜로 설정하면 관리자 화면에 표시됩니다. 만료일을 추측하지 말고 생성된 자원의 정보를 확인합니다.
-7. 기존 Pages의 수업용 학습실 링크는 `https://gpt-learning-classroom.onrender.com`을 기본으로 사용합니다. 주소를 변경하면 GitHub Actions 변수 `CLASSROOM_URL`에 새 HTTPS 배포 주소를 설정하고 Pages 워크플로를 실행합니다.
+7. 기존 Pages의 수업용 학습실 링크는 `https://gpt-learning-classroom.onrender.com`을 기본으로 사용합니다. 주소를 변경하면 GitHub Actions 변수 `CLASSROOM_URL`에 새 HTTPS 배포 주소를 설정하고, `index.html`의 QR 자동 이동 대상도 함께 변경한 뒤 Pages 워크플로를 실행합니다.
 
 ### 생성된 학습실의 연결 상태
 

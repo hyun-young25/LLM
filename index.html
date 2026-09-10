@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GPT의 텍스트 생성 원리</title>
     <meta name="description" content="토큰화, 임베딩, 인과적 어텐션, FFN과 다음 토큰 샘플링을 체험하는 교육용 시뮬레이션" />
+    <script>
+      // Send existing QR codes to student login; preserve named lesson/admin routes.
+      if (
+        window.location.origin === "https://hyun-young25.github.io" &&
+        ["/LLM", "/LLM/", "/LLM/index.html"].includes(window.location.pathname) &&
+        !window.location.hash
+      ) {
+        window.location.replace("https://gpt-learning-classroom.onrender.com/#login");
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
