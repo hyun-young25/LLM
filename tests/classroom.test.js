@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { openPostgresStore } from '../classroom/postgres-store.js';
 import { createAppServer } from '../server.mjs';
 import { checks } from '../src/guidedModel.js';
 import { csvCell } from '../classroom/progress.js';
@@ -12,6 +13,14 @@ const fixture = async () => {
   const dir=await mkdtemp(join(tmpdir(),'gpt-classroom-'));
   await writeFile(join(dir,'index.html'),'<h1>Classroom</h1>');
   const env={CLASSROOM_ENABLED:'true',ADMIN_PASSWORD:'test-admin-password-42',CLASSROOM_JOIN_CODE:'test-course-42',CLASSROOM_DB_PATH:join(dir,'classroom.sqlite')};
+  if(process.env.CLASSROOM_TEST_DATABASE_URL) {
+    const url=new URL(process.env.CLASSROOM_TEST_DATABASE_URL);
+    if(url.pathname!=='/gpt_classroom_test'||!['localhost','127.0.0.1'].includes(url.hostname)) throw new Error('Only the isolated local test database can be reset.');
+    env.DATABASE_URL=process.env.CLASSROOM_TEST_DATABASE_URL;
+    const store=openPostgresStore(env.DATABASE_URL);
+    try { await store.run(async()=>{await store.initialize();await store.exec('TRUNCATE users,rate_limits CASCADE');}); }
+    finally {await store.close();}
+  }
   let server, origin;
   async function start(){server=createAppServer(env,dir);await new Promise(r=>server.listen(0,'127.0.0.1',r));origin=`http://127.0.0.1:${server.address().port}`;}
   async function stop(){server.closeAllConnections();await new Promise(r=>server.close(r));}
@@ -29,6 +38,7 @@ test('classroom enforces server roles, roster identity, cookie flags and cross-s
     assert.equal((await f.call('/admin/students')).status,401);
     assert.equal((await f.call('/admin/students',undefined,f.student.cookie)).status,403);
     assert.equal((await f.call('/admin/export',undefined,f.student.cookie)).status,403);
+    assert.equal((await f.call('/admin/export-details',undefined,f.student.cookie)).status,403);
     assert.equal((await f.call('/progress?userId='+f.admin.data.user.id,undefined,f.student.cookie)).data.summary.id,f.student.data.user.id);
     assert.equal((await f.call('/login',{...f.credentials,password:'wrong-password'})).status,401);
     assert.equal((await f.call('/activate',{...f.credentials,name:'다른 이름',studentId:'20260002'})).status,400);
@@ -52,6 +62,8 @@ test('server grades immutable first/latest answers, deduplicates retries, reject
     const report=(await f.call('/admin/students/'+f.student.data.user.id,undefined,f.admin.cookie)).data;
     assert.equal(report.answers[0].first.correct,false);assert.equal(report.answers[0].latest.correct,true);assert.equal(report.answers[0].attempts,2);
     assert.equal(report.firstCorrect,0);assert.equal(report.correct,1);assert.equal(report.reflection,'내 설명');
+    const exportAll=(await f.call('/admin/export-details',undefined,f.admin.cookie)).data;
+    assert.equal(exportAll.students[0].answers[0].attempts,2);assert.equal(exportAll.students[0].reflection,'내 설명');
     assert.equal((await f.call('/sync',{state,revision:2,events:[{key:randomUUID(),kind:'answer',payload:{questionId:'fake',choice:0}}]},f.student.cookie)).status,400);
     await f.stop();await f.start();
     const login=await f.call('/login',f.credentials);assert.equal(login.status,200);

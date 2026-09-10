@@ -11,6 +11,20 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: classroom_test
+          POSTGRES_PASSWORD: local_ci_test_only
+          POSTGRES_DB: gpt_classroom_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U classroom_test -d gpt_classroom_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,6 +33,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Verify classroom against PostgreSQL
+        run: node --test tests/classroom.test.js
+        env:
+          CLASSROOM_TEST_DATABASE_URL: postgresql://classroom_test:local_ci_test_only@127.0.0.1:5432/gpt_classroom_test
       - run: npm run build
         env:
           VITE_ENABLE_GEMINI: 'false'
