@@ -17,7 +17,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: CLASSROOM_ENABLED
-        value: true
+        value: "true"
       - key: CLASSROOM_DB_PATH
         value: /data/classroom.sqlite
       - key: ADMIN_LOGIN
