@@ -18,9 +18,11 @@
 6. 데이터베이스의 실제 만료일을 `CLASSROOM_EXPIRES_AT`에 ISO 날짜로 설정하면 관리자 화면에 표시됩니다. 만료일을 추측하지 말고 생성된 자원의 정보를 확인합니다.
 7. 기존 Pages의 수업용 학습실 링크는 `https://gpt-learning-classroom.onrender.com`을 기본으로 사용합니다. 주소를 변경하면 GitHub Actions 변수 `CLASSROOM_URL`에 새 HTTPS 배포 주소를 설정하고 Pages 워크플로를 실행합니다.
 
-### 생성된 학습실의 마지막 연결 설정
+### 생성된 학습실의 연결 상태
 
-무료 웹 서비스 `gpt-learning-classroom`과 무료 Postgres `gpt-learning-records`는 생성되어 있습니다. 새 Blueprint로 중복 생성하지 마세요. 현재 기록 기능은 데이터베이스 연결을 마칠 때까지 비활성화되어 있습니다.
+무료 웹 서비스 `gpt-learning-classroom`과 무료 Postgres `gpt-learning-records`의 연결을 완료했습니다. 2026년 9월 11일(한국 시간) 운영 주소에서 데이터베이스 상태 확인, 관리자 로그인·학생 목록 조회·로그아웃, 비로그인 관리자 접근 차단을 확인했습니다. 학생 명단을 등록한 뒤 수업에 사용하세요. 새 Blueprint로 중복 생성하지 마세요.
+
+연결 설정을 다시 확인해야 할 때는 다음 항목을 사용합니다.
 
 1. Render에서 `gpt-learning-records`의 **Connect → Internal Database URL**을 복사합니다.
 2. `gpt-learning-classroom`의 **Environment**에서 `DATABASE_URL`에 해당 값을 추가하고, `CLASSROOM_ENABLED`를 `true`로 변경한 뒤 저장·재배포합니다. 연결 주소는 비밀번호를 포함하므로 저장소에 넣지 않습니다.
