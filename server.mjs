@@ -3,12 +3,17 @@ import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleGeminiRequest } from './geminiProxy.js';
+import { createClassroom } from './classroom/api.js';
 
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 export function createAppServer(env = process.env, directory = resolve('dist')) {
-  return createServer(async (req, res) => {
+  const classroom = createClassroom(env);
+  const server = createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      res.setHeader('Referrer-Policy', 'same-origin');
+      res.setHeader('X-Frame-Options', 'DENY');
+      if (pathname.startsWith('/api/classroom/')) return await classroom.handle(req, res);
       if (pathname === '/api/gemini-next-token') return await handleGeminiRequest(req, res, env);
       if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); res.end(); return; }
       const target = resolve(directory, '.' + (pathname.endsWith('/') ? pathname + 'index.html' : pathname));
@@ -22,6 +27,8 @@ export function createAppServer(env = process.env, directory = resolve('dist')) 
       res.end('페이지를 찾을 수 없습니다.');
     }
   });
+  server.on('close', () => classroom.close());
+  return server;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 3000;

@@ -1,12 +1,14 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useClassroom } from './classroomClient.js';
 import { relationshipActivities, runActivity, compareStages } from './relationshipActivities.js';
 import OutputCalculation from './OutputCalculation.vue';
 
+const classroom = useClassroom();
 const emit = defineEmits(['complete', 'explore']);
 const activeId = ref('context');
 const empty = () => ({ guess: null, ran: false, reason: null, reflection: '' });
-const records = ref(Object.fromEntries(relationshipActivities.map(activity => [activity.id, empty()])));
+const records = ref(Object.fromEntries(relationshipActivities.map(activity => [activity.id, { ...empty(), ...(classroom.state.relationships?.[activity.id] || {}) }])));
 const activity = computed(() => relationshipActivities.find(item => item.id === activeId.value));
 const record = computed(() => records.value[activeId.value]);
 const completed = item => records.value[item.id].ran && records.value[item.id].reason === item.correctReason;
@@ -15,9 +17,11 @@ const results = computed(() => record.value.ran ? runActivity(activity.value) : 
 const stages = computed(() => results.value ? compareStages(results.value.before, results.value.after) : []);
 const format = (values, probability = false) => values.slice(0, 6).map(value => probability ? `${(value * 100).toFixed(1)}%` : value.toFixed(3)).join(' · ') + (values.length > 6 ? ' · …' : '');
 const pct = value => (value * 100).toFixed(1);
-function run() { if (record.value.guess !== null) record.value.ran = true; }
-function reset() { records.value[activeId.value] = empty(); }
+function run() { if (record.value.guess !== null) { record.value.ran = true; classroom.track('relationship', { experiment: activeId.value, action: '실험 실행', guess: record.value.guess }); } }
+function reset() { records.value[activeId.value] = empty(); classroom.track('relationship', { experiment: activeId.value, action: '실험 다시 시작' }); }
 watch(total, value => emit('complete', value === relationshipActivities.length), { immediate: true });
+function chooseReason(index) { if(record.value.reason===index)return; record.value.reason=index; classroom.track('relationship', { experiment: activeId.value, reason: index }); }
+watch(records, value => classroom.snapshot({ relationships: value }), { deep: true });
 </script>
 
 <template>
@@ -42,14 +46,14 @@ watch(total, value => emit('complete', value === relationshipActivities.length),
         </table>
       </div>
       <details class="guide-details"><summary>숫자 전체와 입력 토큰 확인하기</summary><p>마지막 토큰: {{ results.before.selected.token }} · ID {{ results.before.selected.id }} → {{ results.after.selected.id }}</p><section v-for="row in stages" :key="row.id" class="relationship-full-values"><strong>{{ row.label }}</strong><code>전: {{ row.before.map(value => value.toFixed(6)).join(' · ') }}</code><code>후: {{ row.after.map(value => value.toFixed(6)).join(' · ') }}</code></section></details>
-      <fieldset class="guide-reason"><legend>3. 숫자를 근거로 이유 설명하기 · {{ activity.reasonQuestion }}</legend><button v-for="(choice, index) in activity.reasons" :key="choice" type="button" :class="{ selected: record.reason === index }" :aria-pressed="record.reason === index" @click="record.reason = index">{{ choice }}</button></fieldset>
+      <fieldset class="guide-reason"><legend>3. 숫자를 근거로 이유 설명하기 · {{ activity.reasonQuestion }}</legend><button v-for="(choice, index) in activity.reasons" :key="choice" type="button" :class="{ selected: record.reason === index }" :aria-pressed="record.reason === index" @click="chooseReason(index)">{{ choice }}</button></fieldset>
       <p v-if="record.reason !== null" class="guide-feedback" :class="{ retry: record.reason !== activity.correctReason }" role="status">{{ record.reason === activity.correctReason ? activity.feedback : activity.hint }}</p>
       <details class="guide-details"><summary>어텐션 비중과 다음 토큰 확률을 나란히 보기</summary>
         <p>두 분포는 대상과 역할이 다릅니다. 어텐션은 <strong>입력 위치의 정보를 섞는 비중</strong>, 출력은 <strong>다음에 선택할 후보의 확률</strong>입니다. 아래는 바꾼 뒤의 결과입니다.</p>
         <div class="relationship-settings"><section><strong>어텐션 · 참고할 입력 위치</strong><ul class="relationship-distribution"><li v-for="row in results.after.attention" :key="row.index"><span>{{ row.index + 1 }}. {{ row.token }}</span><b>{{ pct(row.weight) }}%</b></li></ul></section><section><strong>출력 · 다음 토큰 후보</strong><ul class="relationship-distribution"><li v-for="row in results.after.projection.rows" :key="row.token"><span>{{ row.token }}</span><b>{{ pct(row.probability) }}%</b></li></ul></section></div>
       </details>
       <details class="guide-details"><summary>FFN 숫자가 출력 점수와 확률이 되는 과정 보기</summary><OutputCalculation :projection="results.after.projection" /></details>
-      <div class="guide-reflection"><label :for="`relationship-note-${activeId}`">내 설명에 숫자 근거 하나 넣기</label><textarea :id="`relationship-note-${activeId}`" v-model="record.reflection" rows="2" maxlength="600" placeholder="바꾼 조건은… / 그대로인 단계는… / 달라진 숫자는… / 그 이유는…"></textarea><small>자유 서술은 자동 채점하지 않습니다. 위 비교표의 숫자를 근거로 설명하고 선생님이나 짝과 비교하세요.</small></div>
+      <div class="guide-reflection"><label :for="`relationship-note-${activeId}`">내 설명에 숫자 근거 하나 넣기</label><textarea :id="`relationship-note-${activeId}`" v-model="record.reflection" @change="classroom.track('reflection', { experiment: activeId, text: record.reflection })" rows="2" maxlength="600" placeholder="바꾼 조건은… / 그대로인 단계는… / 달라진 숫자는… / 그 이유는…"></textarea><small>자유 서술은 자동 채점하지 않습니다. 위 비교표의 숫자를 근거로 설명하고 선생님이나 짝과 비교하세요. 학생 로그인 시 작성 내용이 저장됩니다.</small></div>
       <div class="guide-inline-actions"><button class="guide-secondary" type="button" @click="emit('explore', { page: 'output', context: activity.after.input, hiddenDimension: activity.after.hiddenDimension, temperature: activity.after.temperature, mode: 'connected' })">이 조건으로 단계별 계산 더 살펴보기</button></div>
     </div>
     <p class="guide-small">이 실험은 고정된 예시 임베딩과 신경망 가중치로 끝까지 계산합니다. 앞 활동의 문장 빈도 모형과 계산 방법이 다릅니다. 자연스러운 언어 생성 성능을 평가하는 모형은 아닙니다.</p>

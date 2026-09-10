@@ -4,10 +4,12 @@ import { applySamplingTemperature, sampleCandidate } from "./sampling.js";
 import { requestPrediction, DEMO_NOTE } from "./prediction.js";
 import { softmax, causalWeights, feedForward } from "./learningMath.js";
 import { buildTokenItem, tokenize, seededNoise, denseDimensionValue, projectVector, dot, buildAttentionRowsForItems, projectOutput, runConnectedModel, CONNECTED_NOTE } from './connectedModel.js';
+import { useClassroom } from './classroomClient.js';
 import GuidedLearning from "./GuidedLearning.vue";
 import ConceptExplainer from "./ConceptExplainer.vue";
 import OutputCalculation from "./OutputCalculation.vue";
 
+const classroom = useClassroom();
 const pages = [
   {
     key: "tokenize",
@@ -739,6 +741,7 @@ watch(predictionMode, reset);
 watch(ffnHiddenDimension, () => { if (predictionMode.value === "connected") { clearPrediction(); maybePredictOnOutputPage(); } });
 
 watch(activePageIndex, maybePredictOnOutputPage);
+watch(activePageIndex, index => { if(viewMode.value === 'advanced') classroom.track('advanced', { page: pages[index].label, temperature: temperature.value, hiddenDimension: ffnHiddenDimension.value }); });
 
 function showGuided() {
   clearPrediction();
@@ -771,6 +774,7 @@ async function showConnections() {
 }
 
 function syncPageFromRoute() {
+  if (['#admin', '#login'].includes(window.location.hash)) return;
   if (typeof window === "undefined") return;
   const key = window.location.hash.replace(/^#/, "");
   if (key === "connections") { showConnections(); return; }

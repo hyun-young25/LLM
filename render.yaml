@@ -1,0 +1,28 @@
+# This Blueprint requires a paid web service and persistent disk.
+# Review Render's current charges before approving creation.
+services:
+  - type: web
+    name: gpt-learning-classroom
+    runtime: docker
+    plan: starter
+    region: singapore
+    healthCheckPath: /api/classroom/health
+    disk:
+      name: classroom-records
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: CLASSROOM_ENABLED
+        value: true
+      - key: CLASSROOM_DB_PATH
+        value: /data/classroom.sqlite
+      - key: ADMIN_LOGIN
+        value: instructor
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: CLASSROOM_JOIN_CODE
+        generateValue: true

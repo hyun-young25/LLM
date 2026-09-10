@@ -1,48 +1,51 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useClassroom } from './classroomClient.js';
 import { sampleCandidate } from './sampling.js';
 import ConceptExplainer from './ConceptExplainer.vue';
 import RelationshipLab from './RelationshipLab.vue';
 import { lessonPairs, contexts, checks, predictFromExamples, drawSamples, textFromTokens } from './guidedModel.js';
 
+const classroom = useClassroom();
+const saved = JSON.parse(JSON.stringify(classroom.state.guided || {}));
 const emit = defineEmits(['explore', 'activity']);
 const steps = ['먼저 예상', '문맥 비교', '확률 실험', '한 조각씩 생성', '개념 연결 실험', '이해 확인'];
-const step = ref(0);
+const step = ref(saved.step ?? 0);
 const relationshipsComplete = ref(false);
 const relationshipReset = ref(0);
-const pairId = ref('needs');
+const pairId = ref(saved.pairId ?? 'needs');
 const pair = computed(() => lessonPairs.find(item => item.id === pairId.value));
 const before = computed(() => contexts[pair.value.before]);
 const after = computed(() => contexts[pair.value.after]);
 const beforeResult = computed(() => predictFromExamples(before.value.prefix));
 const afterResult = computed(() => predictFromExamples(after.value.prefix));
 const allTokens = computed(() => [...new Set([...beforeResult.value.candidates, ...afterResult.value.candidates].map(item => item.token))]);
-const guess = ref('');
-const revealed = ref(false);
-const riseGuess = ref('');
-const compared = ref(false);
-const compareReason = ref(null);
-const sampleContext = ref('thirst');
-const sampleTemperature = ref(1);
-const sampleCounts = ref({});
-const sampleLast = ref('');
-const samplePrediction = ref(null);
+const guess = ref(saved.guess ?? '');
+const revealed = ref(saved.revealed ?? false);
+const riseGuess = ref(saved.riseGuess ?? '');
+const compared = ref(saved.compared ?? false);
+const compareReason = ref(saved.compareReason ?? null);
+const sampleContext = ref(saved.sampleContext ?? 'thirst');
+const sampleTemperature = ref(saved.sampleTemperature ?? 1);
+const sampleCounts = ref(saved.sampleCounts ?? {});
+const sampleLast = ref(saved.sampleLast ?? '');
+const samplePrediction = ref(saved.samplePrediction ?? null);
 const sampleDistribution = computed(() => predictFromExamples(contexts[sampleContext.value].prefix, sampleTemperature.value));
 const sampleBaseline = computed(() => predictFromExamples(contexts[sampleContext.value].prefix));
 const sampleTotal = computed(() => Object.values(sampleCounts.value).reduce((sum, count) => sum + count, 0));
-const generationContext = ref('thirst');
-const generated = ref([]);
-const generationGuess = ref('');
-const history = ref([]);
+const generationContext = ref(saved.generationContext ?? 'thirst');
+const generated = ref(saved.generated ?? []);
+const generationGuess = ref(saved.generationGuess ?? '');
+const history = ref(saved.history ?? []);
 const prefix = computed(() => [...contexts[generationContext.value].prefix, ...generated.value]);
 const generationResult = computed(() => predictFromExamples(prefix.value));
 const ended = computed(() => generated.value.at(-1) === '<eos>');
 const lastTurn = computed(() => history.value.at(-1));
-const answers = ref({});
-const reflection = ref('');
+const answers = ref(saved.answers ?? {});
+const reflection = ref(saved.reflection ?? '');
 const showReflection = ref(false);
 const correctCount = computed(() => checks.filter(question => question.options[answers.value[question.id]]?.correct).length);
-const done = computed(() => [revealed.value, compared.value && compareReason.value === 0, sampleTotal.value >= 20 && samplePrediction.value === 1, ended.value, relationshipsComplete.value, correctCount.value === checks.length]);
+const done = computed(() => [revealed.value, compared.value && compareReason.value === 0, sampleTotal.value >= 20 && samplePrediction.value === 1, ended.value, relationshipsComplete.value, checks.every(question => answers.value[question.id] !== undefined)]);
 const completedCount = computed(() => done.value.filter(Boolean).length);
 const compareChoices = [
   '앞의 문맥에 맞는 예시가 달라졌기 때문에',
@@ -61,9 +64,10 @@ const stageHeading = computed(() => [
 function pct(value) { return (value * 100).toFixed(1).replace(/\.0$/, ''); }
 function probability(result, token) { return result.candidates.find(item => item.token === token)?.probability || 0; }
 function tokenLabel(token) { return token === '<eos>' ? '종료 <eos>' : token; }
-function reveal() { if (guess.value) revealed.value = true; }
-function compare() { if (riseGuess.value) { compared.value = true; sampleContext.value = pair.value.after; generationContext.value = pair.value.after; } }
+function reveal() { if (guess.value) { revealed.value = true; classroom.track('reveal', { guess: guess.value, context: pairId.value }); } }
+function compare() { if (riseGuess.value) { compared.value = true; sampleContext.value = pair.value.after; generationContext.value = pair.value.after; classroom.track('compare', { guess: riseGuess.value, context: pairId.value }); } }
 function sample(n) {
+  classroom.track('sample', { context: sampleContext.value, temperature: sampleTemperature.value, count: n });
   const drawn = drawSamples(sampleDistribution.value.candidates, n);
   for (const [token, amount] of Object.entries(drawn)) sampleCounts.value[token] = (sampleCounts.value[token] || 0) + amount;
   sampleLast.value = n === 1 ? Object.keys(drawn)[0] : '';
@@ -76,23 +80,36 @@ function generateOne() {
   const selected = sampleCandidate(candidates);
   if (!selected) return;
   history.value.push({ context: textFromTokens(prefix.value), token: selected.token, probability: selected.probability, guess: generationGuess.value, candidates: candidates.map(item => ({ ...item })) });
+  classroom.track('generation', { context: textFromTokens(prefix.value), guess: generationGuess.value, token: selected.token });
   generated.value.push(selected.token);
   generationGuess.value = '';
 }
 function navigate(index) { step.value = Math.max(0, Math.min(steps.length - 1, index)); }
 function restart() {
+  classroom.track('restart', { action: '학습 활동 처음부터' });
+  classroom.snapshot({ relationships: {} });
   relationshipsComplete.value = false; relationshipReset.value += 1;
   pairId.value = 'needs'; sampleContext.value = 'thirst'; generationContext.value = 'thirst';
   step.value = 0; guess.value = ''; revealed.value = false; riseGuess.value = ''; compared.value = false; compareReason.value = null;
   resetSamples(); sampleTemperature.value = 1; samplePrediction.value = null; resetGeneration(); answers.value = {}; reflection.value = ''; showReflection.value = false;
 }
 defineExpose({ openRelationships: () => navigate(4) });
-watch(step, value => emit('activity', value));
+watch(step, value => { emit('activity', value); classroom.track('activity', { stage: steps[value] }); });
 function explore(page) { emit('explore', { page, context: contexts[generationContext.value].label }); }
 watch(pairId, () => { guess.value = ''; revealed.value = false; riseGuess.value = ''; compared.value = false; compareReason.value = null; });
 watch([sampleTemperature, sampleContext], resetSamples);
 watch(generationContext, resetGeneration);
 watch(sampleContext, () => { generationContext.value = sampleContext.value; });
+function chooseAnswer(questionId, choice) {
+  if (answers.value[questionId] === choice) return;
+  answers.value[questionId] = choice;
+  classroom.track('answer', { questionId, choice });
+}
+watch(compareReason, value => { if(value !== null) classroom.track('compare', { reason: value, context: pairId.value }); });
+watch(samplePrediction, value => { if(value !== null) classroom.track('sample', { reason: value, temperature: sampleTemperature.value }); });
+const savedState = computed(() => ({ step: step.value, pairId: pairId.value, guess: guess.value, revealed: revealed.value, riseGuess: riseGuess.value, compared: compared.value, compareReason: compareReason.value, sampleContext: sampleContext.value, sampleTemperature: sampleTemperature.value, sampleCounts: sampleCounts.value, sampleLast: sampleLast.value, samplePrediction: samplePrediction.value, generationContext: generationContext.value, generated: generated.value, generationGuess: generationGuess.value, history: history.value, answers: answers.value, reflection: reflection.value }));
+watch(savedState, state => classroom.snapshot({ guided: state }), { deep: true });
+function saveReflection() { classroom.track('reflection', { text: reflection.value }); }
 </script>
 
 <template>
@@ -188,8 +205,8 @@ watch(sampleContext, () => { generationContext.value = sampleContext.value; });
 
     <div v-else-if="step === 5" class="guide-activity">
       <div class="guide-check-score"><strong>선택 문항 {{ correctCount }} / {{ checks.length }} 확인</strong><span>맞힌 개수뿐 아니라, 선택한 이유도 말로 설명해 보세요.</span></div>
-      <fieldset v-for="(question, questionIndex) in checks" :key="question.id" class="guide-check"><legend>{{ questionIndex + 1 }}. {{ question.title }}</legend><p>{{ question.prompt }}</p><div class="guide-check-options"><button v-for="(option, optionIndex) in question.options" :key="option.text" type="button" :class="{ selected: answers[question.id] === optionIndex, correct: answers[question.id] === optionIndex && option.correct, incorrect: answers[question.id] === optionIndex && !option.correct }" :aria-pressed="answers[question.id] === optionIndex" @click="answers[question.id] = optionIndex">{{ option.text }}</button></div><div v-if="answers[question.id] !== undefined" class="guide-feedback" :class="{ retry: !question.options[answers[question.id]].correct }" role="status"><p>{{ question.options[answers[question.id]].feedback }}</p><button v-if="!question.options[answers[question.id]].correct" class="guide-text-button" type="button" @click="navigate(question.revisit)">관련 활동 다시 해보기</button></div></fieldset>
-      <div class="guide-reflection"><label for="guideReflection">내 말로 설명하기</label><p>문맥을 바꿀 때와 온도만 바꿀 때, 달라지는 계산 단계가 어떻게 다른지 설명해 보세요. 임베딩·어텐션·FFN·출력 점수 중 두 개 이상을 사용하고 실험에서 본 숫자도 근거로 넣으세요.</p><textarea id="guideReflection" v-model="reflection" rows="4" maxlength="800" placeholder="문맥이 바뀌면… / 같은 문맥이어도…"></textarea><button type="button" class="guide-secondary" @click="showReflection = !showReflection">{{ showReflection ? '예시 설명 접기' : '예시 설명과 비교하기' }}</button><p v-if="showReflection" class="guide-feedback">마지막 토큰이 같으면 기본 임베딩은 같아도, 앞 문맥이 달라지면 어텐션이 섞는 정보와 FFN 출력, 후보 점수가 달라질 수 있습니다. 온도만 바꾸면 이 숫자들은 그대로이고 점수로부터 구하는 선택 확률이 달라집니다. 선택한 토큰은 다음 문맥에 추가됩니다.</p><small>작성한 문장은 자동 채점하거나 서버에 저장하지 않습니다. 자신의 설명을 예시와 비교하거나 선생님께 보여 주세요.</small></div>
+      <fieldset v-for="(question, questionIndex) in checks" :key="question.id" class="guide-check"><legend>{{ questionIndex + 1 }}. {{ question.title }}</legend><p>{{ question.prompt }}</p><div class="guide-check-options"><button v-for="(option, optionIndex) in question.options" :key="option.text" type="button" :class="{ selected: answers[question.id] === optionIndex, correct: answers[question.id] === optionIndex && option.correct, incorrect: answers[question.id] === optionIndex && !option.correct }" :aria-pressed="answers[question.id] === optionIndex" @click="chooseAnswer(question.id, optionIndex)">{{ option.text }}</button></div><div v-if="answers[question.id] !== undefined" class="guide-feedback" :class="{ retry: !question.options[answers[question.id]].correct }" role="status"><p>{{ question.options[answers[question.id]].feedback }}</p><button v-if="!question.options[answers[question.id]].correct" class="guide-text-button" type="button" @click="navigate(question.revisit)">관련 활동 다시 해보기</button></div></fieldset>
+      <div class="guide-reflection"><label for="guideReflection">내 말로 설명하기</label><p>문맥을 바꿀 때와 온도만 바꿀 때, 달라지는 계산 단계가 어떻게 다른지 설명해 보세요. 임베딩·어텐션·FFN·출력 점수 중 두 개 이상을 사용하고 실험에서 본 숫자도 근거로 넣으세요.</p><textarea id="guideReflection" v-model="reflection" @change="saveReflection" rows="4" maxlength="800" placeholder="문맥이 바뀌면… / 같은 문맥이어도…"></textarea><button type="button" class="guide-secondary" @click="showReflection = !showReflection">{{ showReflection ? '예시 설명 접기' : '예시 설명과 비교하기' }}</button><p v-if="showReflection" class="guide-feedback">마지막 토큰이 같으면 기본 임베딩은 같아도, 앞 문맥이 달라지면 어텐션이 섞는 정보와 FFN 출력, 후보 점수가 달라질 수 있습니다. 온도만 바꾸면 이 숫자들은 그대로이고 점수로부터 구하는 선택 확률이 달라집니다. 선택한 토큰은 다음 문맥에 추가됩니다.</p><small>자유 서술은 자동 채점하지 않습니다. 학생으로 로그인한 경우 작성 내용이 학습 기록에 저장되며 담당 교수가 확인할 수 있습니다.</small></div>
       <section class="guide-bridge"><h3>이제 컴퓨터 안에서 일어나는 일을 살펴볼까요?</h3><p>실제 GPT는 단순히 예시 문장 수를 세지 않습니다. 학습된 신경망이 문맥을 처리해 다음 토큰의 점수를 계산합니다.</p><div class="guide-bridge-grid"><button type="button" @click="explore('tokenize')"><strong>1. 토큰화</strong><span>문장을 작은 조각과 ID로 바꾸기</span></button><button type="button" @click="explore('embedding')"><strong>2. 임베딩</strong><span>토큰 ID에 해당하는 기본 숫자 목록 가져오기</span></button><button type="button" @click="explore('attention')"><strong>3. 어텐션(Attention)</strong><span>자기 위치와 앞쪽 토큰의 정보를 비중에 따라 섞기</span></button><button type="button" @click="explore('ffn')"><strong>4. 피드포워드(FFN)</strong><span>각 토큰에 모인 정보를 새 숫자 목록으로 변환하기</span></button><button type="button" @click="explore('output')"><strong>5. 출력·선택</strong><span>점수를 확률로 바꾸고 다음 토큰 고르기</span></button><button type="button" @click="explore('test')"><strong>6. 반복 생성</strong><span>새 토큰을 문맥에 붙이고 다시 예측하기</span></button></div><p class="guide-small">심화 화면의 벡터와 계산도 설명용 예시입니다. 심화의 기본 ‘계산 연결 모형’은 FFN 출력에서 후보 점수와 확률까지 계산합니다. 실제 GPT의 가중치를 사용한 것은 아닙니다. ‘문장 예시’와 Gemini 후보 방식도 별도로 선택할 수 있습니다.</p></section>
     </div>
 
