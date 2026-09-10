@@ -3,440 +3,253 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0f2f6b" />
-  <title>2주차 이론 웹 학습지 | LLM과 생성형 AI</title>
+  <meta name="theme-color" content="#123b7a" />
+  <title>2주차 이론 핵심정리 | LLM과 생성형 AI</title>
   <style>
     :root{
-      --navy:#123b7a;
-      --blue:#2f75c9;
-      --orange:#e9783f;
-      --ink:#171717;
-      --muted:#68707c;
-      --line:#dfe5ec;
-      --soft:#f5f8fc;
-      --soft2:#fff7f1;
-      --ok:#17845b;
-      --danger:#b42318;
-      --white:#fff;
+      --navy:#123b7a; --blue:#2f75c9; --orange:#e9783f;
+      --ink:#171717; --muted:#68707c; --line:#dfe5ec;
+      --soft:#f5f8fc; --soft2:#fff7f1; --white:#fff;
+      --ok:#176747; --bad:#b42318;
     }
     *{box-sizing:border-box}
     html{scroll-behavior:smooth}
-    body{
-      margin:0;
-      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
-      color:var(--ink);
-      background:#eef3f8;
-      line-height:1.6;
-    }
-    .topbar{
-      position:sticky;top:0;z-index:20;
-      background:rgba(255,255,255,.96);
-      backdrop-filter:blur(10px);
-      border-bottom:1px solid var(--line);
-    }
-    .topbar-inner{
-      max-width:900px;margin:0 auto;padding:12px 18px;
-      display:flex;align-items:center;justify-content:space-between;gap:12px;
-    }
-    .brand{display:flex;align-items:center;gap:10px;font-weight:900;color:var(--navy)}
-    .brand-mark{width:11px;height:30px;border-radius:999px;background:linear-gradient(var(--orange),#f3a126)}
-    .progress-wrap{min-width:132px}
-    .progress-label{font-size:12px;color:var(--muted);text-align:right;margin-bottom:4px}
-    .progress{height:7px;background:#e7edf4;border-radius:999px;overflow:hidden}
-    .progress > span{display:block;height:100%;width:0;background:var(--blue);transition:width .25s}
-    main{max-width:900px;margin:0 auto;padding:24px 16px 70px}
-    .hero,.card{
-      background:var(--white);border:1px solid var(--line);border-radius:22px;
-      box-shadow:0 10px 30px rgba(21,48,82,.06);
-    }
-    .hero{padding:28px;margin-bottom:18px}
-    .eyebrow{font-size:13px;font-weight:800;color:var(--orange);letter-spacing:.02em}
-    h1{font-size:clamp(27px,5vw,42px);line-height:1.2;margin:6px 0 10px}
-    .hero p{margin:0;color:#3d4652}
-    .goal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
-    .goal{padding:13px;border-radius:14px;background:var(--soft);font-size:14px}
-    .notice{margin-top:16px;padding:13px 15px;border-radius:14px;background:#edf7f2;color:#245c48;font-size:14px}
-    .card{padding:24px;margin:16px 0}
-    .section-title{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
-    .num{flex:0 0 auto;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--orange);color:#fff;font-weight:900}
-    h2{font-size:22px;line-height:1.3;margin:1px 0 3px}
-    .subtitle{font-size:14px;color:var(--muted)}
-    .field-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--ink);background:#eef3f8;line-height:1.6}
+    .topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    .topbar-inner{max-width:860px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+    .brand{display:flex;align-items:center;gap:9px;font-weight:900;color:var(--navy);font-size:14px}
+    .brand-mark{width:10px;height:28px;border-radius:999px;background:linear-gradient(var(--orange),#f3a126)}
+    .progress-wrap{min-width:125px}
+    .progress-label{font-size:11px;color:var(--muted);text-align:right;margin-bottom:3px}
+    .progress{height:6px;background:#e7edf4;border-radius:999px;overflow:hidden}
+    .progress span{display:block;height:100%;width:0;background:var(--blue);transition:width .2s}
+    main{max-width:860px;margin:0 auto;padding:18px 12px 60px}
+    .hero,.card{background:var(--white);border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 24px rgba(21,48,82,.05)}
+    .hero{padding:24px;margin-bottom:14px}
+    .eyebrow{font-size:12px;font-weight:900;color:var(--orange);letter-spacing:.04em}
+    h1{font-size:clamp(26px,5vw,38px);line-height:1.18;margin:5px 0 9px}
+    .hero p{margin:0;color:#3e4650}
+    .time{display:inline-block;margin-top:12px;padding:6px 10px;border-radius:999px;background:#edf4ff;color:#234d86;font-size:12px;font-weight:800}
+    .notice{margin-top:14px;padding:12px 14px;border-radius:13px;background:#edf7f2;color:#245c48;font-size:13px}
+    .card{padding:21px;margin:14px 0}
+    .section-title{display:flex;align-items:flex-start;gap:11px;margin-bottom:13px}
+    .num{flex:0 0 auto;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--orange);color:#fff;font-weight:900}
+    h2{font-size:20px;line-height:1.3;margin:1px 0 2px}
+    .subtitle{font-size:13px;color:var(--muted)}
+    .field-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
     label{font-weight:750;font-size:14px}
-    input[type="text"],input[type="number"],textarea,select{
-      width:100%;margin-top:6px;border:1px solid #cbd4df;border-radius:12px;padding:12px 13px;
-      font:inherit;background:#fff;color:var(--ink);outline:none;
-    }
-    textarea{min-height:92px;resize:vertical}
-    input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,201,.12)}
-    .prompt,.formula,.codebox{
-      border-radius:15px;padding:15px 16px;margin:12px 0;background:#111827;color:#f6f7fb;
-      overflow-x:auto;
-    }
-    .prompt{background:var(--soft2);color:#5d2d14;border:1px solid #f2d6c7;font-weight:800}
-    .formula{background:#eef4ff;color:#173f82;border:1px solid #d5e4fb;text-align:center;font-weight:800;font-size:18px}
-    .codebox{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
-    table{width:100%;border-collapse:collapse;margin:12px 0 16px;font-size:15px}
-    th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left}
-    th{background:var(--soft);font-weight:800}
-    .q{margin-top:18px;padding-top:16px;border-top:1px dashed #d8dee7}
+    input[type="text"],input[type="number"],textarea{width:100%;margin-top:6px;border:1px solid #cbd4df;border-radius:12px;padding:11px 12px;font:inherit;background:#fff;color:var(--ink);outline:none}
+    textarea{min-height:82px;resize:vertical}
+    input:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,201,.12)}
+    .invalid{border-color:var(--bad)!important;box-shadow:0 0 0 3px rgba(180,35,24,.10)!important}
+    .sim-box{display:grid;grid-template-columns:1.35fr .65fr;gap:12px;align-items:center;background:linear-gradient(135deg,#f7fbff,#fff5ed);border:1px solid #dbe5ef;border-radius:16px;padding:15px}
+    .small{font-size:12px;color:var(--muted)}
+    .formula{border-radius:14px;padding:14px 15px;margin:11px 0;background:#eef4ff;color:#173f82;border:1px solid #d5e4fb;text-align:center;font-weight:850;font-size:17px}
+    .codebox{border-radius:14px;padding:13px 15px;margin:11px 0;background:#111827;color:#f6f7fb;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
+    .q{margin-top:16px;padding-top:15px;border-top:1px dashed #d8dee7}
     .q:first-of-type{border-top:0;padding-top:0}
-    .q-title{font-weight:850;margin-bottom:9px}
-    .choices{display:grid;gap:9px}
-    .choice{
-      display:flex;gap:10px;align-items:flex-start;border:1px solid #d6dee8;border-radius:13px;padding:11px 12px;background:#fff;cursor:pointer;
-    }
+    .q-title{font-weight:850;margin-bottom:8px}
+    .choices{display:grid;gap:8px}
+    .choice{display:flex;gap:9px;align-items:flex-start;border:1px solid #d6dee8;border-radius:12px;padding:10px 11px;background:#fff;cursor:pointer;font-weight:650}
     .choice:has(input:checked){border-color:var(--blue);background:#f1f6ff}
-    .choice input{margin-top:5px;transform:scale(1.15)}
-    .small{font-size:13px;color:var(--muted)}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .compare{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fbfcfe}
-    .compare strong{color:var(--navy)}
-    .sim-box{display:grid;grid-template-columns:1.3fr .7fr;gap:14px;align-items:center;background:linear-gradient(135deg,#f7fbff,#fff5ed);border:1px solid #dbe5ef;border-radius:18px;padding:18px}
-    .btn{
-      appearance:none;border:0;border-radius:13px;padding:13px 17px;font:inherit;font-weight:850;cursor:pointer;
-      background:var(--navy);color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;
-    }
-    .btn.secondary{background:#e8eef6;color:#18375f}
+    .choice input{margin-top:4px;transform:scale(1.12)}
+    table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+    th,td{border-bottom:1px solid var(--line);padding:9px 7px;text-align:left;vertical-align:top}
+    th{background:var(--soft);font-weight:800}
+    .btn{appearance:none;border:0;border-radius:12px;padding:12px 15px;font:inherit;font-weight:850;cursor:pointer;background:var(--navy);color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
     .btn.orange{background:var(--orange)}
-    .btn:active{transform:translateY(1px)}
-    .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+    .btn.secondary{background:#e8eef6;color:#18375f}
+    .actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:13px}
     .submit-card{border:2px solid #cddbed;background:linear-gradient(180deg,#fff,#f7fbff)}
-    .status{margin-top:12px;padding:11px 13px;border-radius:12px;background:#f2f5f8;color:#48515d;font-size:14px}
-    .status.ok{background:#eaf7f1;color:#176747}
-    .status.bad{background:#fff0ef;color:var(--danger)}
-    .footer{text-align:center;color:#7b8491;font-size:12px;margin-top:25px}
-    .hidden{display:none!important}
-    @media (max-width:720px){
-      .topbar-inner{padding:10px 14px}
-      .brand{font-size:14px}
-      .progress-wrap{min-width:105px}
-      main{padding:16px 10px 55px}
-      .hero,.card{border-radius:17px;padding:18px}
-      .goal-grid,.field-grid,.two-col,.sim-box{grid-template-columns:1fr}
-      h2{font-size:19px}
-      table{font-size:14px}
-      th,td{padding:9px 6px}
-      .btn{width:100%}
-      .actions{display:grid}
+    .status{margin-top:11px;padding:10px 12px;border-radius:11px;background:#f2f5f8;color:#48515d;font-size:13px}
+    .status.ok{background:#eaf7f1;color:var(--ok)}
+    .status.bad{background:#fff0ef;color:var(--bad)}
+    .footer{text-align:center;color:#7b8491;font-size:11px;margin-top:22px}
+    @media(max-width:700px){
+      .topbar-inner{padding:9px 11px}.progress-wrap{min-width:100px}.brand{font-size:12px}
+      main{padding:12px 8px 48px}.hero,.card{padding:17px;border-radius:16px}
+      .field-grid,.sim-box{grid-template-columns:1fr}.btn{width:100%}.actions{display:grid}
+      h2{font-size:18px}table{font-size:13px}th,td{padding:8px 5px}
     }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="topbar-inner">
-      <div class="brand"><span class="brand-mark"></span><span>AI 협업 프로그래밍 · 2주차 이론</span></div>
-      <div class="progress-wrap">
-        <div class="progress-label"><span id="progressText">0</span>% 작성</div>
-        <div class="progress"><span id="progressBar"></span></div>
-      </div>
-    </div>
-  </div>
+  <div class="topbar"><div class="topbar-inner">
+    <div class="brand"><span class="brand-mark"></span><span>AI 협업 프로그래밍 · 2주차 이론</span></div>
+    <div class="progress-wrap"><div class="progress-label"><span id="progressText">0</span>% 작성</div><div class="progress"><span id="progressBar"></span></div></div>
+  </div></div>
 
   <main>
     <section class="hero">
-      <div class="eyebrow">WEEK 02 · THEORY ACTIVITY</div>
-      <h1>LLM의 다음 토큰 예측과 생성형 AI</h1>
-      <p>웹에서 생성 과정을 관찰하고, 조건부확률·Context·Embedding·Diffusion 개념으로 다시 설명해 봅니다.</p>
-      <div class="goal-grid">
-        <div class="goal"><b>① 조건부확률</b><br>P(다음 토큰 | Context)를 해석한다.</div>
-        <div class="goal"><b>② 생성 과정</b><br>토큰화→임베딩→Attention→샘플링을 연결한다.</div>
-        <div class="goal"><b>③ 확장</b><br>LLM과 이미지 Diffusion의 공통점과 차이를 설명한다.</div>
-      </div>
-      <div class="notice">입력 내용은 이 기기 브라우저에 자동 저장됩니다. 서버로 전송되지 않으며, 마지막에 제출용 <b>.md 파일</b>을 직접 저장합니다.</div>
+      <div class="eyebrow">WEEK 02 · EXIT TICKET</div>
+      <h1>생성형 AI의 작동 원리 핵심정리</h1>
+      <p>체험 사이트에서 본 현상을 수학과 핵심 개념으로 짧게 정리하고 제출합니다.</p>
+      <span class="time">권장 작성 시간 · 10~15분</span>
+      <div class="notice">답안은 이 기기 브라우저에 자동 저장됩니다. 앞부분은 LLM 체험 후 작성하고, <b>마지막 비교 문항은 이미지 생성 원리 강의 후</b> 마무리하세요.</div>
     </section>
 
     <section class="card">
       <div class="section-title"><span class="num">0</span><div><h2>학생 정보</h2><div class="subtitle">제출 파일명에 사용됩니다.</div></div></div>
       <div class="field-grid">
-        <label>학과<input data-save id="dept" type="text" placeholder="예: 기계공학과"></label>
-        <label>학번<input data-save id="sid" type="text" inputmode="numeric" placeholder="예: 20261234"></label>
-        <label>이름<input data-save id="name" type="text" placeholder="예: 홍길동"></label>
+        <label>학과<input data-save data-required id="dept" type="text" placeholder="예: 기계공학과"></label>
+        <label>학번<input data-save data-required id="sid" type="text" inputmode="numeric" placeholder="예: 20261234"></label>
+        <label>이름<input data-save data-required id="name" type="text" placeholder="예: 홍길동"></label>
       </div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span class="num">1</span><div><h2>먼저, 텍스트 생성 원리를 관찰</h2><div class="subtitle">강의에서 본 “Context → 다음 토큰 확률 → 선택 → 반복”을 직접 확인합니다.</div></div></div>
+      <div class="section-title"><span class="num">1</span><div><h2>체험에서 확인한 것</h2><div class="subtitle">사이트의 1~4단계를 중심으로 ‘문맥이 바뀌면 분포가 바뀌는 현상’을 관찰합니다.</div></div></div>
       <div class="sim-box">
-        <div>
-          <b>GPT의 텍스트 생성 원리 체험</b>
-          <div class="small">새 탭에서 열어 체험한 뒤 이 페이지로 돌아오세요. 작성 내용은 자동 저장됩니다.</div>
-        </div>
-        <a class="btn orange" href="./" target="_blank" rel="noopener">체험 페이지 열기 ↗</a>
+        <div><b>GPT의 텍스트 생성 원리 학습실</b><div class="small">새 탭에서 체험한 뒤 이 페이지로 돌아오세요.</div></div>
+        <a class="btn orange" href="https://gpt-learning-classroom.onrender.com/#login" target="_blank" rel="noopener">학습실 열기 ↗</a>
       </div>
-      <div class="q">
-        <div class="q-title">체험하면서 문맥의 단어 하나를 바꿔 보세요. 무엇을 바꿨나요?</div>
-        <input data-save id="exp_change" type="text" placeholder="예: ‘오늘 날씨가 참’ → ‘오늘 시험이 참’">
-      </div>
-      <div class="q">
-        <div class="q-title">문맥을 바꾼 뒤 다음 토큰 후보 또는 확률은 어떻게 달라졌나요?</div>
-        <textarea data-save id="exp_observe" placeholder="1~2문장으로 관찰한 내용을 적으세요."></textarea>
-      </div>
+      <div class="q"><div class="q-title">문맥(Context)이 달라졌을 때 다음 조각의 후보 또는 확률분포가 왜 달라진다고 생각하나요?</div><textarea data-save data-required id="observe" placeholder="1~2문장으로 적으세요."></textarea></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span class="num">2</span><div><h2>다음 토큰의 조건부확률</h2><div class="subtitle">조건은 현재까지 주어진 Context입니다.</div></div></div>
-      <div class="prompt">오늘 날씨가 매우 ________</div>
-      <table>
-        <thead><tr><th>다음 표현 후보 <span class="small">(설명용)</span></th><th>조건부확률</th></tr></thead>
-        <tbody><tr><td>춥다</td><td>0.50</td></tr><tr><td>좋다</td><td>0.25</td></tr><tr><td>덥다</td><td>0.15</td></tr><tr><td>흐리다</td><td>0.10</td></tr></tbody>
-      </table>
-      <div class="small">※ 실제 토큰 분할 방식은 모델의 tokenizer에 따라 달라질 수 있습니다.</div>
-      <div class="formula">P(x<sub>t+1</sub> | x<sub>1</sub>, x<sub>2</sub>, …, x<sub>t</sub>)</div>
-      <div class="q">
-        <div class="q-title">(1) 가장 가능성이 높은 다음 표현은?</div>
-        <div class="choices">
-          <label class="choice"><input data-save type="radio" name="q1a" value="춥다">춥다</label>
-          <label class="choice"><input data-save type="radio" name="q1a" value="좋다">좋다</label>
-          <label class="choice"><input data-save type="radio" name="q1a" value="덥다">덥다</label>
-          <label class="choice"><input data-save type="radio" name="q1a" value="흐리다">흐리다</label>
-        </div>
-      </div>
-      <div class="q">
-        <div class="q-title">(2) P(덥다 | “오늘 날씨가 매우”)의 값은?</div>
-        <input data-save id="q1b" type="number" inputmode="decimal" step="0.01" min="0" max="1" placeholder="예: 0.15">
-      </div>
-      <div class="q">
-        <div class="q-title">(3) 위 확률에서 ‘조건(condition)’에 해당하는 정보는 무엇인가요?</div>
-        <textarea data-save id="q1c" placeholder="현재까지 주어진 어떤 정보가 조건인지 적으세요."></textarea>
-      </div>
+      <div class="section-title"><span class="num">2</span><div><h2>조건부확률과 연쇄법칙</h2><div class="subtitle">체험에서 본 ‘한 조각씩 생성’을 수학으로 표현합니다.</div></div></div>
+      <div class="formula">P(학교에 | 나는) = 0.60 &nbsp;&nbsp; P(간다 | 나는, 학교에) = 0.70</div>
+      <div class="q"><div class="q-title">(1) “나는”이 이미 주어졌을 때 “학교에 → 간다”가 연속으로 생성될 확률은?</div><input data-save data-required id="chain" type="number" inputmode="decimal" step="0.01" min="0" max="1" placeholder="계산 결과"></div>
+      <div class="q"><div class="q-title">(2) 왜 두 확률을 곱하는지 ‘조건부확률’ 또는 ‘연쇄법칙’이라는 말을 사용해 설명하세요.</div><textarea data-save data-required id="chainReason"></textarea></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span class="num">3</span><div><h2>코드 생성도 같은 원리</h2><div class="subtitle">자연어와 Python 코드 모두 토큰 시퀀스로 생성될 수 있습니다.</div></div></div>
-      <div class="codebox"># 0부터 9까지 숫자를 출력한다</div>
-      <table><thead><tr><th>다음 코드 토큰 후보</th><th>확률</th></tr></thead><tbody><tr><td><code>for</code></td><td>0.60</td></tr><tr><td><code>print</code></td><td>0.20</td></tr><tr><td><code>while</code></td><td>0.15</td></tr><tr><td><code>if</code></td><td>0.05</td></tr></tbody></table>
-      <div class="q">
-        <div class="q-title">(1) P(for | “0부터 9까지 숫자를 출력한다”) = 0.60의 의미를 자신의 말로 설명하세요.</div>
-        <textarea data-save id="q2a"></textarea>
-      </div>
-      <div class="q">
-        <div class="q-title">(2) 첫 번째 토큰으로 <code>for</code>가 선택되었습니다. 다음 토큰을 예측할 때 Context는 어떻게 달라지나요?</div>
-        <textarea data-save id="q2b" placeholder="‘기존 Context에 …가 추가된다’의 관점으로 적어 보세요."></textarea>
-      </div>
+      <div class="section-title"><span class="num">3</span><div><h2>자기회귀적 생성</h2><div class="subtitle">선택된 토큰은 끝이 아니라 다음 예측의 새 조건이 됩니다.</div></div></div>
+      <div class="codebox"># 0부터 9까지 숫자를 출력한다
+→ 첫 토큰으로 for가 선택됨</div>
+      <div class="q"><div class="q-title">다음 토큰을 예측할 때 Context는 어떻게 달라지나요?</div><textarea data-save data-required id="autoregressive" placeholder="‘기존 Context에 …가 추가되고 …’의 형태로 설명해 보세요."></textarea></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span class="num">4</span><div><h2>확률의 연쇄법칙(Chain Rule)</h2><div class="subtitle">LLM은 생성한 토큰을 다시 Context에 넣고 다음 확률을 계산합니다.</div></div></div>
-      <div class="formula">P(학교에 | 나는) = 0.60 &nbsp;&nbsp;&nbsp; P(간다 | 나는, 학교에) = 0.70</div>
-      <div class="q">
-        <div class="q-title">(1) “나는”이 이미 주어졌을 때, 이어서 “학교에 → 간다”가 생성될 확률은?</div>
-        <input data-save id="q3a" type="number" inputmode="decimal" step="0.01" min="0" max="1" placeholder="계산 결과 입력">
-      </div>
-      <div class="q">
-        <div class="q-title">(2) 위 계산에 사용한 원리를 한 문장으로 설명하세요.</div>
-        <textarea data-save id="q3b"></textarea>
-      </div>
-      <div class="formula">P(x<sub>1</sub>, …, x<sub>n</sub>) = ∏ P(x<sub>t</sub> | x<sub>1</sub>, …, x<sub>t−1</sub>)</div>
-    </section>
-
-    <section class="card">
-      <div class="section-title"><span class="num">5</span><div><h2>Context가 바뀌면 분포도 바뀐다</h2><div class="subtitle">프롬프트는 다음 토큰의 조건부확률에 영향을 주는 Context입니다.</div></div></div>
-      <div class="two-col">
-        <div class="compare"><strong>상황 A</strong><br>“Python 함수를 만들어줘.”<br><br>P(return | A) = <b>0.25</b></div>
-        <div class="compare"><strong>상황 B</strong><br>“두 수를 입력받아 합을 반환하는 Python 함수를 만들어줘.”<br><br>P(return | B) = <b>0.70</b></div>
-      </div>
-      <div class="q"><div class="q-title">(1) 같은 <code>return</code> 토큰의 확률이 A와 B에서 달라진 이유는?</div><textarea data-save id="q4a"></textarea></div>
-      <div class="q"><div class="q-title">(2) “프롬프트는 다음 토큰의 조건부확률을 바꾸는 Context다”를 자신의 말로 풀어 쓰세요.</div><textarea data-save id="q4b"></textarea></div>
-    </section>
-
-    <section class="card">
-      <div class="section-title"><span class="num">6</span><div><h2>프롬프트가 구체적이면 무엇이 달라질까?</h2><div class="subtitle">‘좋은 프롬프트 기술’보다, Context가 생성 분포를 어떻게 제한하는지 생각합니다.</div></div></div>
-      <div class="two-col">
-        <div class="compare"><strong>프롬프트 A</strong><br>“학생 점수 처리 함수 만들어줘.”</div>
-        <div class="compare"><strong>프롬프트 B</strong><br>“0~100점 정수를 입력받아 60점 이상이면 True, 그렇지 않으면 False를 반환하는 is_pass(score) 함수를 만들어줘. 60점은 True여야 한다.”</div>
-      </div>
-      <div class="q">
-        <div class="q-title">(1) 다음 토큰 분포를 더 구체적으로 제한하는 프롬프트는?</div>
-        <div class="choices">
-          <label class="choice"><input data-save type="radio" name="q5a" value="A">A</label>
-          <label class="choice"><input data-save type="radio" name="q5a" value="B">B</label>
-        </div>
-      </div>
-      <div class="q">
-        <div class="q-title">(2) 프롬프트 B에 추가된 조건을 3개 이상 체크하세요.</div>
-        <div class="choices">
-          <label class="choice"><input data-save type="checkbox" name="q5conds" value="입력 범위 0~100점">입력 범위 0~100점</label>
-          <label class="choice"><input data-save type="checkbox" name="q5conds" value="60점 이상 기준">60점 이상 기준</label>
-          <label class="choice"><input data-save type="checkbox" name="q5conds" value="True/False 반환">True/False 반환</label>
-          <label class="choice"><input data-save type="checkbox" name="q5conds" value="함수명 is_pass(score)">함수명 is_pass(score)</label>
-          <label class="choice"><input data-save type="checkbox" name="q5conds" value="60점은 True">60점은 True</label>
-        </div>
-      </div>
-      <div class="q"><div class="q-title">(3) 조건이 추가되면 생성되는 코드의 형태가 달라질 수 있는 이유를 조건부확률·Context 관점에서 설명하세요.</div><textarea data-save id="q5c"></textarea></div>
-    </section>
-
-    <section class="card">
-      <div class="section-title"><span class="num">7</span><div><h2>Token → Embedding → Attention</h2><div class="subtitle">토큰 ID 자체는 단순 번호이고, 계산을 위해 벡터 표현으로 바뀝니다.</div></div></div>
-      <div class="formula">token ID → embedding vector e ∈ ℝ<sup>d</sup> → Attention/FFN → 문맥화된 표현</div>
+      <div class="section-title"><span class="num">4</span><div><h2>Token · Embedding · Attention</h2><div class="subtitle">텍스트가 신경망 안에서 계산 가능한 표현으로 바뀌는 흐름을 확인합니다.</div></div></div>
+      <div class="formula">Token → Embedding vector → Attention/FFN → 문맥화된 표현</div>
       <div class="q">
         <div class="q-title">(1) Token과 Embedding의 차이를 가장 잘 설명한 것은?</div>
-        <div class="choices">
-          <label class="choice"><input data-save type="radio" name="q6a" value="A">A. Token은 확률이고 Embedding은 정답이다.</label>
-          <label class="choice"><input data-save type="radio" name="q6a" value="B">B. Token은 텍스트를 나눈 단위이고, Embedding은 토큰을 계산 가능한 벡터로 표현한 것이다.</label>
-          <label class="choice"><input data-save type="radio" name="q6a" value="C">C. Token과 Embedding은 같은 개념이다.</label>
+        <div class="choices" id="conceptGroup">
+          <label class="choice"><input data-save data-required type="radio" name="concept" value="A">A. Token은 확률값이고 Embedding은 정답값이다.</label>
+          <label class="choice"><input data-save data-required type="radio" name="concept" value="B">B. Token은 텍스트를 나눈 단위이고, Embedding은 토큰을 계산 가능한 벡터로 표현한 것이다.</label>
+          <label class="choice"><input data-save data-required type="radio" name="concept" value="C">C. Token과 Embedding은 같은 개념이다.</label>
         </div>
       </div>
-      <div class="q"><div class="q-title">(2) 같은 ‘배’라는 토큰이 “배를 먹었다”와 “배가 항구에 들어왔다”에서 다른 의미로 해석될 수 있는 데 Attention이 왜 필요한가요?</div><textarea data-save id="q6b"></textarea></div>
-      <div class="q">
-        <div class="q-title">(3) LLM의 생성 과정을 올바르게 배열한 것을 고르세요.</div>
-        <div class="choices">
-          <label class="choice"><input data-save type="radio" name="q6c" value="A">A. Prompt → Tokenization → Embedding/Attention → 다음 토큰 분포 → Sampling → Context에 추가 → 반복</label>
-          <label class="choice"><input data-save type="radio" name="q6c" value="B">B. Prompt → Sampling → Tokenization → 정답 검색 → 출력</label>
-          <label class="choice"><input data-save type="radio" name="q6c" value="C">C. Prompt → 이미지 변환 → Embedding → 한 번에 전체 문장 생성</label>
-        </div>
-      </div>
+      <div class="q"><div class="q-title">(2) 같은 ‘배’가 “배를 먹었다”와 “배가 항구에 들어왔다”에서 다르게 해석될 때 Attention은 어떤 역할을 하나요?</div><textarea data-save data-required id="attention"></textarea></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span class="num">8</span><div><h2>텍스트 생성과 이미지 생성 비교</h2><div class="subtitle">두 생성형 AI는 모두 조건을 사용하지만 반복 방식은 다릅니다.</div></div></div>
+      <div class="section-title"><span class="num">5</span><div><h2>LLM과 이미지 Diffusion 비교</h2><div class="subtitle">이미지 생성 원리 강의를 들은 뒤 작성합니다.</div></div></div>
       <table>
         <thead><tr><th>구분</th><th>LLM · 텍스트/코드</th><th>Diffusion · 이미지</th></tr></thead>
         <tbody>
           <tr><td>시작</td><td>Prompt / Context</td><td>Prompt + Noise</td></tr>
           <tr><td>표현</td><td>Token / Embedding</td><td>Pixel 또는 Latent</td></tr>
           <tr><td>반복</td><td>다음 토큰을 하나씩 추가</td><td>Noisy representation을 반복 정제</td></tr>
-          <tr><td>결과</td><td>텍스트·코드</td><td>이미지</td></tr>
         </tbody>
       </table>
-      <div class="q"><div class="q-title">(1) LLM과 Diffusion의 공통점 1개를 쓰세요.</div><textarea data-save id="q7a"></textarea></div>
-      <div class="q"><div class="q-title">(2) 두 모델의 생성 방식에서 가장 중요한 차이점 1개를 쓰세요.</div><textarea data-save id="q7b"></textarea></div>
+      <div class="q"><div class="q-title">(1) 두 방식의 공통점 1개를 쓰세요.</div><textarea data-save data-required id="common" placeholder="예: 둘 다 …"></textarea></div>
+      <div class="q"><div class="q-title">(2) 생성 과정의 가장 중요한 차이점 1개를 쓰세요.</div><textarea data-save data-required id="difference"></textarea></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span class="num">9</span><div><h2>오늘의 한 문장</h2><div class="subtitle">이번 시간의 핵심을 자신의 언어로 정리합니다.</div></div></div>
-      <div class="q"><div class="q-title">“조건부확률”이라는 말을 반드시 사용하여 LLM의 작동 원리를 한 문장으로 설명하세요.</div><textarea data-save id="final" placeholder="예: LLM은 …"></textarea></div>
+      <div class="section-title"><span class="num">6</span><div><h2>오늘의 한 문장</h2><div class="subtitle">이번 시간의 핵심을 자신의 언어로 정리합니다.</div></div></div>
+      <div class="q"><div class="q-title">‘조건부확률’이라는 말을 반드시 사용하여 LLM의 작동 원리를 한 문장으로 설명하세요.</div><textarea data-save data-required id="final" placeholder="LLM은 …"></textarea></div>
     </section>
 
     <section class="card submit-card" id="submit">
-      <div class="section-title"><span class="num">✓</span><div><h2>제출 파일 만들기</h2><div class="subtitle">답안을 확인한 뒤 .md 파일을 저장하여 LMS에 제출하세요.</div></div></div>
-      <div class="small">권장 파일명: <b id="filenamePreview">2주차_이론_학번_이름.md</b></div>
+      <div class="section-title"><span class="num">✓</span><div><h2>제출 파일 만들기</h2><div class="subtitle">모든 필수 문항을 작성해야 파일을 저장할 수 있습니다.</div></div></div>
+      <div class="small">파일명: <b id="filenamePreview">2주차_이론_학번_이름.md</b></div>
       <div class="actions">
         <button class="btn orange" id="downloadBtn" type="button">제출 파일 저장 (.md)</button>
-        <button class="btn" id="shareBtn" type="button">휴대폰으로 저장·공유</button>
+        <button class="btn" id="shareBtn" type="button">휴대폰 저장·공유</button>
         <button class="btn secondary" id="copyBtn" type="button">제출 내용 복사</button>
-        <button class="btn secondary" id="clearBtn" type="button">이 기기의 임시저장 초기화</button>
       </div>
-      <div id="status" class="status">작성 내용은 자동 저장 중입니다.</div>
+      <div id="status" class="status">작성 내용은 이 기기에 자동 저장됩니다.</div>
     </section>
 
-    <div class="footer">AI 협업 프로그래밍 · 2주차 이론 활동 · 브라우저 로컬 저장 방식</div>
+    <div class="footer">AI 협업 프로그래밍 · 2주차 이론 핵심정리</div>
   </main>
 
 <script>
 (() => {
-  const STORAGE_KEY = 'week02_theory_llm_worksheet_v1';
-  const all = [...document.querySelectorAll('[data-save]')];
-  const status = document.getElementById('status');
-  const progressText = document.getElementById('progressText');
-  const progressBar = document.getElementById('progressBar');
-  const filenamePreview = document.getElementById('filenamePreview');
+  const KEY='week02_theory_exit_ticket_v2';
+  const saveEls=[...document.querySelectorAll('[data-save]')];
+  const required=[...document.querySelectorAll('[data-required]')];
+  const status=document.getElementById('status');
+  const progressText=document.getElementById('progressText');
+  const progressBar=document.getElementById('progressBar');
+  const filenamePreview=document.getElementById('filenamePreview');
 
-  const getRadio = name => document.querySelector(`input[name="${name}"]:checked`)?.value || '';
-  const getChecks = name => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(x => x.value);
-  const val = id => (document.getElementById(id)?.value || '').trim();
+  const val=id=>(document.getElementById(id)?.value||'').trim();
+  const radio=name=>document.querySelector(`input[name="${name}"]:checked`)?.value||'';
+  const sanitize=s=>(s||'').replace(/[\\/:*?"<>|\s]+/g,'_').replace(/^_+|_+$/g,'')||'미입력';
+  const filename=()=>`2주차_이론_${sanitize(val('sid')||'학번')}_${sanitize(val('name')||'이름')}.md`;
 
-  function collect(){
-    return {
-      dept: val('dept'), sid: val('sid'), name: val('name'),
-      exp_change: val('exp_change'), exp_observe: val('exp_observe'),
-      q1a: getRadio('q1a'), q1b: val('q1b'), q1c: val('q1c'),
-      q2a: val('q2a'), q2b: val('q2b'),
-      q3a: val('q3a'), q3b: val('q3b'),
-      q4a: val('q4a'), q4b: val('q4b'),
-      q5a: getRadio('q5a'), q5conds: getChecks('q5conds'), q5c: val('q5c'),
-      q6a: getRadio('q6a'), q6b: val('q6b'), q6c: getRadio('q6c'),
-      q7a: val('q7a'), q7b: val('q7b'), final: val('final')
-    };
-  }
+  function collect(){return{
+    dept:val('dept'),sid:val('sid'),name:val('name'),observe:val('observe'),chain:val('chain'),chainReason:val('chainReason'),
+    autoregressive:val('autoregressive'),concept:radio('concept'),attention:val('attention'),common:val('common'),difference:val('difference'),final:val('final')
+  }}
 
   function restore(){
-    let d={};
-    try{ d=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'); }catch(e){}
+    let d={}; try{d=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
     for(const [k,v] of Object.entries(d)){
-      if(Array.isArray(v)){
-        document.querySelectorAll(`input[name="${k}"]`).forEach(el => el.checked=v.includes(el.value));
-      }else{
-        const direct=document.getElementById(k);
-        if(direct) direct.value=v;
-        document.querySelectorAll(`input[name="${k}"]`).forEach(el => el.checked=el.value===v);
-      }
+      const el=document.getElementById(k); if(el) el.value=v;
+      document.querySelectorAll(`input[name="${k}"]`).forEach(x=>x.checked=x.value===v);
     }
   }
 
-  function sanitize(s){ return (s||'').replace(/[\\/:*?"<>|\s]+/g,'_').replace(/^_+|_+$/g,'') || '미입력'; }
-  function filename(){ return `2주차_이론_${sanitize(val('sid')||'학번')}_${sanitize(val('name')||'이름')}.md`; }
+  function isFilled(el){
+    if(el.type==='radio') return !!radio(el.name);
+    return !!String(el.value||'').trim();
+  }
 
-  const requiredKeys=['dept','sid','name','exp_change','exp_observe','q1a','q1b','q1c','q2a','q2b','q3a','q3b','q4a','q4b','q5a','q5c','q6a','q6b','q6c','q7a','q7b','final'];
+  function uniqueRequired(){
+    const seen=new Set(); return required.filter(el=>{const key=el.type==='radio'?`radio:${el.name}`:`id:${el.id}`; if(seen.has(key))return false; seen.add(key); return true;});
+  }
+
   function updateUI(){
-    const d=collect();
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(d));
-    const filled=requiredKeys.filter(k => String(d[k]||'').trim()).length;
-    const pct=Math.round(filled/requiredKeys.length*100);
-    progressText.textContent=pct;
-    progressBar.style.width=pct+'%';
-    filenamePreview.textContent=filename();
+    const d=collect(); localStorage.setItem(KEY,JSON.stringify(d));
+    const req=uniqueRequired(); const filled=req.filter(isFilled).length; const pct=Math.round(filled/req.length*100);
+    progressText.textContent=pct; progressBar.style.width=pct+'%'; filenamePreview.textContent=filename();
+    required.forEach(x=>x.classList.remove('invalid')); document.getElementById('conceptGroup').classList.remove('invalid');
   }
 
-  function missing(){
-    const d=collect();
-    const labels={dept:'학과',sid:'학번',name:'이름',exp_change:'체험 문맥 변경',exp_observe:'체험 관찰',q1a:'문제 2-(1)',q1b:'문제 2-(2)',q1c:'문제 2-(3)',q2a:'문제 3-(1)',q2b:'문제 3-(2)',q3a:'문제 4-(1)',q3b:'문제 4-(2)',q4a:'문제 5-(1)',q4b:'문제 5-(2)',q5a:'문제 6-(1)',q5c:'문제 6-(3)',q6a:'문제 7-(1)',q6b:'문제 7-(2)',q6c:'문제 7-(3)',q7a:'문제 8-(1)',q7b:'문제 8-(2)',final:'오늘의 한 문장'};
-    return requiredKeys.filter(k=>!String(d[k]||'').trim()).map(k=>labels[k]||k);
-  }
-
-  function md(){
-    const d=collect();
-    return `# 2주차 이론 활동 — LLM의 다음 토큰 예측과 생성형 AI\n\n- 학과: ${d.dept}\n- 학번: ${d.sid}\n- 이름: ${d.name}\n\n## 1. 텍스트 생성 원리 체험\n- 바꾼 문맥: ${d.exp_change}\n- 관찰: ${d.exp_observe}\n\n## 2. 다음 토큰의 조건부확률\n1. 가장 가능성이 높은 다음 표현: ${d.q1a}\n2. P(덥다 | “오늘 날씨가 매우”): ${d.q1b}\n3. 조건(condition)에 해당하는 정보: ${d.q1c}\n\n## 3. 코드 생성과 조건부확률\n1. P(for | 주석)=0.60의 의미: ${d.q2a}\n2. for 선택 후 Context 변화: ${d.q2b}\n\n## 4. 확률의 연쇄법칙\n1. “학교에 → 간다” 생성 확률: ${d.q3a}\n2. 사용한 원리: ${d.q3b}\n\n## 5. Context 변화\n1. return 확률이 달라진 이유: ${d.q4a}\n2. 프롬프트와 Context 설명: ${d.q4b}\n\n## 6. 구체적 프롬프트와 생성 분포\n1. 선택: ${d.q5a}\n2. 추가 조건: ${d.q5conds.join(', ')}\n3. 조건부확률·Context 관점 설명: ${d.q5c}\n\n## 7. Token → Embedding → Attention\n1. Token과 Embedding: ${d.q6a}\n2. Attention이 필요한 이유: ${d.q6b}\n3. LLM 생성 순서: ${d.q6c}\n\n## 8. 텍스트 생성과 이미지 생성\n1. 공통점: ${d.q7a}\n2. 차이점: ${d.q7b}\n\n## 9. 오늘의 한 문장\n${d.final}\n`;
-  }
-
-  function validateOrWarn(){
-    const miss=missing();
+  function validate(){
+    const req=uniqueRequired(); const miss=req.filter(el=>!isFilled(el));
+    required.forEach(x=>x.classList.remove('invalid')); document.getElementById('conceptGroup').classList.remove('invalid');
     if(miss.length){
-      status.className='status bad';
-      status.textContent=`아직 비어 있는 항목 ${miss.length}개: ${miss.slice(0,6).join(', ')}${miss.length>6?' 외':''}`;
+      miss.forEach(el=>{ if(el.type==='radio') document.getElementById('conceptGroup').classList.add('invalid'); else el.classList.add('invalid'); });
+      status.className='status bad'; status.textContent=`필수 항목 ${miss.length}개가 비어 있습니다. 빨간 표시 항목을 먼저 작성하세요.`;
+      const first=miss[0].type==='radio'?document.getElementById('conceptGroup'):miss[0]; first.scrollIntoView({behavior:'smooth',block:'center'});
+      if(miss[0].type!=='radio') setTimeout(()=>miss[0].focus(),350);
       return false;
     }
-    status.className='status ok';
-    status.textContent='모든 필수 항목이 작성되었습니다. 제출 파일을 저장하세요.';
-    return true;
+    status.className='status ok'; status.textContent='모든 필수 항목이 작성되었습니다. 제출 파일을 저장하세요.'; return true;
   }
 
-  all.forEach(el=>{
-    el.addEventListener('input',updateUI);
-    el.addEventListener('change',updateUI);
-  });
+  function markdown(){
+    const d=collect();
+    return `# 2주차 이론 핵심정리 — 생성형 AI의 작동 원리\n\n- 학과: ${d.dept}\n- 학번: ${d.sid}\n- 이름: ${d.name}\n\n## 1. 체험에서 확인한 것\n${d.observe}\n\n## 2. 조건부확률과 연쇄법칙\n- 계산 결과: ${d.chain}\n- 설명: ${d.chainReason}\n\n## 3. 자기회귀적 생성\n${d.autoregressive}\n\n## 4. Token · Embedding · Attention\n- 선택: ${d.concept}\n- Attention 설명: ${d.attention}\n\n## 5. LLM과 이미지 Diffusion 비교\n- 공통점: ${d.common}\n- 차이점: ${d.difference}\n\n## 6. 오늘의 한 문장\n${d.final}\n`;
+  }
+
+  saveEls.forEach(el=>{el.addEventListener('input',updateUI);el.addEventListener('change',updateUI)});
 
   document.getElementById('downloadBtn').addEventListener('click',()=>{
-    validateOrWarn();
-    const blob=new Blob([md()],{type:'text/markdown;charset=utf-8'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=filename();
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    if(!validate()) return;
+    const blob=new Blob([markdown()],{type:'text/markdown;charset=utf-8'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename(); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
 
   document.getElementById('shareBtn').addEventListener('click',async()=>{
-    validateOrWarn();
-    const file=new File([md()],filename(),{type:'text/markdown'});
+    if(!validate()) return;
+    const file=new File([markdown()],filename(),{type:'text/markdown'});
     try{
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        await navigator.share({files:[file],title:'2주차 이론 활동 제출 파일'});
-        status.className='status ok'; status.textContent='휴대폰 공유/저장 메뉴를 열었습니다.';
-      }else{
-        status.className='status bad'; status.textContent='이 브라우저는 파일 공유를 지원하지 않습니다. “제출 파일 저장” 버튼을 사용하세요.';
-      }
-    }catch(e){ if(e.name!=='AbortError'){status.className='status bad';status.textContent='공유를 열지 못했습니다. “제출 파일 저장”을 사용하세요.';} }
+      if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'2주차 이론 제출 파일'});status.className='status ok';status.textContent='휴대폰 저장·공유 메뉴를 열었습니다.'}
+      else{status.className='status bad';status.textContent='이 브라우저는 파일 공유를 지원하지 않습니다. “제출 파일 저장”을 사용하세요.'}
+    }catch(e){if(e.name!=='AbortError'){status.className='status bad';status.textContent='공유를 열지 못했습니다. “제출 파일 저장”을 사용하세요.'}}
   });
 
   document.getElementById('copyBtn').addEventListener('click',async()=>{
-    try{ await navigator.clipboard.writeText(md()); status.className='status ok';status.textContent='제출 내용 전체를 클립보드에 복사했습니다.'; }
-    catch(e){ status.className='status bad';status.textContent='복사 권한을 사용할 수 없습니다. 제출 파일 저장을 이용하세요.'; }
-  });
-
-  document.getElementById('clearBtn').addEventListener('click',()=>{
-    if(!confirm('이 기기에 임시 저장된 모든 답안을 지울까요?')) return;
-    localStorage.removeItem(STORAGE_KEY);
-    location.reload();
+    if(!validate()) return;
+    try{await navigator.clipboard.writeText(markdown());status.className='status ok';status.textContent='제출 내용을 복사했습니다.'}
+    catch(e){status.className='status bad';status.textContent='복사 권한을 사용할 수 없습니다. 제출 파일 저장을 사용하세요.'}
   });
 
   restore(); updateUI();
