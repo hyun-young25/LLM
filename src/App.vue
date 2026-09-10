@@ -3,8 +3,10 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { applySamplingTemperature, sampleCandidate } from "./sampling.js";
 import { requestPrediction, DEMO_NOTE } from "./prediction.js";
 import { softmax, causalWeights, feedForward } from "./learningMath.js";
+import { buildTokenItem, tokenize, seededNoise, denseDimensionValue, projectVector, dot, buildAttentionRowsForItems, projectOutput, runConnectedModel, CONNECTED_NOTE } from './connectedModel.js';
 import GuidedLearning from "./GuidedLearning.vue";
 import ConceptExplainer from "./ConceptExplainer.vue";
+import OutputCalculation from "./OutputCalculation.vue";
 
 const pages = [
   {
@@ -40,7 +42,7 @@ const pages = [
     title: "후보 확률과 선택",
     label: "최종 출력",
     oneLine: "후보 확률에 Temperature를 적용하고 하나를 골라 문맥 뒤에 붙입니다.",
-    note: "Logit은 다음 토큰 후보의 원점수입니다. softmax와 temperature를 거쳐 확률 분포가 되고, 선택된 토큰은 다시 입력 문맥에 추가됩니다. 여기서는 실제 출력층 대신 별도 예시 후보로 샘플링을 체험합니다.",
+    note: "출력층은 FFN의 숫자에 가중치를 곱하고 편향을 더해 후보별 원점수(Logit)를 만듭니다. 점수를 온도로 나눈 뒤 Softmax로 확률을 계산하고, 선택한 토큰을 다음 입력 문맥에 붙입니다.",
   },
   {
     key: "test",
@@ -66,9 +68,10 @@ const ffnHiddenOptions = [8, 12, 16, 24, 32];
 const TEST_MAX_ITERATIONS = 10;
 const TEST_TURN_ANIMATION_MS = 3300;
 
-const prompt = ref("오늘 날씨가 어때?");
+const prompt = ref("과일 가게에서 산 배를");
 const activePageIndex = ref(0);
 const viewMode = ref("guided");
+const guideRef = ref(null);
 const embeddingDimension = ref(16);
 const ffnHiddenDimension = ref(16);
 const selectedAttentionIndex = ref(null);
@@ -79,7 +82,7 @@ const predictionStatus = ref("idle");
 const predictionError = ref("");
 const predictionCommitted = ref(false);
 const sampledPredictionToken = ref("");
-const testInput = ref("오늘 날씨가 어때?");
+const testInput = ref("과일 가게에서 산 배를");
 const testRuns = ref([]);
 const selectedTestTurnIndex = ref(null);
 const selectedTestAttentionIndex = ref(null);
@@ -87,12 +90,12 @@ const testAnimationKey = ref(0);
 const testStatus = ref("idle");
 const testError = ref("");
 const SPECIAL_TOKEN = "<eos>";
-const predictionMode = ref("demo");
+const predictionMode = ref("connected");
 const serverAvailable = import.meta.env.DEV || import.meta.env.VITE_ENABLE_GEMINI === "true";
 let predictionController = null;
 let testController = null;
 const generationEnded = computed(() => generatedTokens.value.at(-1) === SPECIAL_TOKEN);
-const modeNote = computed(() => predictionMode.value === "demo" ? DEMO_NOTE : "Gemini가 작성한 교육용 후보·추정 확률입니다. GPT의 내부 확률이나 앞 단계의 벡터에서 계산한 결과가 아닙니다.");
+const modeNote = computed(() => predictionMode.value === "connected" ? CONNECTED_NOTE : predictionMode.value === "demo" ? DEMO_NOTE : "Gemini가 작성한 교육용 후보·추정 확률입니다. GPT의 내부 확률이나 앞 단계의 벡터에서 계산한 결과가 아닙니다.");
 
 const activePage = computed(() => pages[activePageIndex.value]);
 const contextText = computed(() =>
@@ -166,8 +169,9 @@ const contextVector = computed(() => {
 const ffnVectors = computed(() => feedForward(contextVector.value, ffnHiddenDimension.value));
 const ffnLayers = computed(() => buildFfnLayers(ffnVectors.value));
 const ffnConnections = computed(() => buildFfnConnections(ffnLayers.value));
+const outputProjection = computed(() => projectOutput(ffnVectors.value.output, temperature.value));
 const probabilities = computed(() =>
-  applySamplingTemperature((geminiPrediction.value?.candidates || []).filter(candidate => !wouldRepeatGeneratedSequence(candidate.token, generatedTokens.value)), temperature.value),
+  geminiPrediction.value?.source === "connected" ? outputProjection.value.candidates : applySamplingTemperature((geminiPrediction.value?.candidates || []).filter(candidate => !wouldRepeatGeneratedSequence(candidate.token, generatedTokens.value)), temperature.value),
 );
 const chosenToken = computed(
   () =>
@@ -180,6 +184,7 @@ const chosenToken = computed(
 const predictionSourceLabel = computed(() => {
   if (predictionStatus.value === "loading") return "처리 중";
   if (predictionStatus.value === "error") return "예측 실패";
+  if (geminiPrediction.value?.source === "connected") return "FFN → 출력층 → 확률";
   if (geminiPrediction.value?.source === "gemini") return "Gemini 예시 후보";
   if (geminiPrediction.value?.source === "demo") return "교육용 데모 후보";
   return "후보 대기";
@@ -212,47 +217,10 @@ const selectedTestAttentionRows = computed(() => {
   return buildAttentionRowsForItems(items, queryIndex);
 });
 
-function buildTokenItem(token, index, generated) {
-  const id = tokenId(token);
-  return {
-    token,
-    id,
-    index,
-    generated,
-    vector: buildVector(token, id, index),
-  };
-}
 
-function tokenize(text) {
-  const normalized = text.trim() || "텍스트를 입력해보세요";
-  const pieces = normalized.match(/[가-힣]+|[a-zA-Z0-9]+|[^\s가-힣a-zA-Z0-9]/g) || [normalized];
-  return pieces.flatMap((piece) => {
-    if (/^[가-힣]{5,}$/.test(piece)) return piece.match(/.{1,3}/g);
-    if (/^[a-zA-Z0-9]{7,}$/.test(piece)) return piece.match(/.{1,4}/g);
-    return [piece];
-  });
-}
 
-function tokenId(token) {
-  let hash = 17;
-  for (let i = 0; i < token.length; i += 1) {
-    hash = (hash * 37 + token.charCodeAt(i)) % 30000;
-  }
-  return 1000 + hash;
-}
 
-function seededNoise(text, index) {
-  let hash = 0;
-  const source = `${text}:${index}`;
-  for (let i = 0; i < source.length; i += 1) {
-    hash = (hash * 31 + source.charCodeAt(i)) % 9973;
-  }
-  return (hash % 100) / 100;
-}
 
-function buildVector(token, id, index) {
-  return Array.from({ length: 4 }, (_, dimension) => denseDimensionValue(token, id, index, dimension));
-}
 
 function buildEmbeddingPreview(item, dimensions) {
   return Array.from({ length: dimensions }, (_, bucket) => {
@@ -266,23 +234,8 @@ function buildEmbeddingPreview(item, dimensions) {
   });
 }
 
-function denseDimensionValue(token, id, index, dimensionIndex) {
-  const noise = seededNoise(`${token}:${id}:dense:${dimensionIndex}`, dimensionIndex);
-  const wave = Math.sin((dimensionIndex + 1) * 0.37 + id * 0.001) * 0.35;
-  return Number((noise * 2 - 1 + wave).toFixed(2));
-}
 
-function projectVector(vector, kind) {
-  const offset = kind === "q" ? 0.17 : kind === "k" ? -0.11 : 0.29;
-  return vector.map((value, index) => {
-    const scale = 0.65 + seededNoise(`${kind}:${index}`, index) * 0.7;
-    return Number((value * scale + offset * (index % 2 === 0 ? 1 : -1)).toFixed(2));
-  });
-}
 
-function dot(left, right) {
-  return left.reduce((sum, value, index) => sum + value * right[index], 0);
-}
 
 function norm(vector) {
   return Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
@@ -307,6 +260,8 @@ async function runTestGeneration() {
   const controller = new AbortController();
   testController = controller;
   const mode = predictionMode.value;
+  const testTemperature = temperature.value;
+  const testHiddenDimension = ffnHiddenDimension.value;
   const baseTokens = tokenize(source);
   const turns = [];
   let generated = [];
@@ -321,7 +276,7 @@ async function runTestGeneration() {
       controller.signal.throwIfAborted();
       const contextTokens = [...baseTokens, ...generated];
       const generatedText = generated.reduce((text, token) => appendTokenToText(text, token), "");
-      if (shouldFinishGeneratedAnswer(generated)) {
+      if (mode !== "connected" && shouldFinishGeneratedAnswer(generated)) {
         const candidates = forceEosCandidate([]);
         const turn = buildTestTurn(contextTokens, generated, candidates, SPECIAL_TOKEN, step, { source: "guard" });
         turns.push(turn);
@@ -332,11 +287,19 @@ async function runTestGeneration() {
         break;
       }
 
-      const prediction = await requestTestGeminiPrediction(source, generated, generatedText, step, controller.signal, mode);
-      controller.signal.throwIfAborted();
-      let candidates = normalizeTestCandidates({ ...prediction, candidates: prediction.candidates.filter(candidate => !isBadAnswerStartToken(candidate.token, generated) && !isRepetitiveTestToken(candidate.token, generated)) });
-      let sampledToken = resolveTestSampledToken(candidates, generated, step);
-      if (step >= TEST_MAX_ITERATIONS - 1) candidates = forceEosCandidate(candidates);
+      let prediction, candidates, sampledToken;
+      if (mode === "connected") {
+        const trace = runConnectedModel(contextTokens, { temperature: testTemperature, hiddenDimension: testHiddenDimension, contextLimit: Infinity });
+        prediction = { source: "connected", trace, note: CONNECTED_NOTE };
+        candidates = trace.candidates;
+        sampledToken = sampleCandidate(candidates).token;
+      } else {
+        prediction = await requestTestGeminiPrediction(source, generated, generatedText, step, controller.signal, mode);
+        controller.signal.throwIfAborted();
+        candidates = normalizeTestCandidates({ ...prediction, candidates: prediction.candidates.filter(candidate => !isBadAnswerStartToken(candidate.token, generated) && !isRepetitiveTestToken(candidate.token, generated)) });
+        sampledToken = resolveTestSampledToken(candidates, generated, step);
+        if (step >= TEST_MAX_ITERATIONS - 1) candidates = forceEosCandidate(candidates);
+      }
       const turn = buildTestTurn(contextTokens, generated, candidates, sampledToken, step, prediction);
       turns.push(turn);
       testRuns.value = [...turns];
@@ -421,24 +384,6 @@ function normalizeCandidateProbabilities(candidates) {
   return candidates.map((candidate, index) => ({ ...candidate, probability: weights[index] }));
 }
 
-function buildAttentionRowsForItems(items, queryIndex) {
-  const queryItem = items[queryIndex] || items.at(-1);
-  if (!queryItem) return [];
-  const query = projectVector(queryItem.vector, "q");
-  const scoredItems = items.map((item) => {
-    const key = projectVector(item.vector, "k");
-    const value = projectVector(item.vector, "v");
-    const score = dot(query, key) / Math.sqrt(query.length);
-    return { ...item, key, value, score };
-  });
-  const weights = causalWeights(scoredItems.map((item) => item.score), scoredItems.map(item => item.index), queryItem.index);
-  return scoredItems.map((item, index) => ({
-    token: item.token,
-    index: item.index,
-    value: item.value,
-    weight: weights[index],
-  }));
-}
 
 function resolveTestSampledToken(candidates, generated, step) {
   if (step >= TEST_MAX_ITERATIONS - 1 || generated.length >= TEST_MAX_ITERATIONS - 1) return SPECIAL_TOKEN;
@@ -498,7 +443,7 @@ function buildTestTurn(contextTokens, generated, candidates, sampledToken, step,
     (acc, item) => acc.map((value, dimension) => value + item.value[dimension] * item.weight),
     [0, 0, 0, 0],
   );
-  const ffn = buildTestFfn(contextVector);
+  const ffn = prediction?.trace?.ffn || buildTestFfn(contextVector);
   const answer = generated
     .concat(sampledToken === SPECIAL_TOKEN ? [] : [sampledToken])
     .reduce((text, token) => appendTokenToText(text, token), "");
@@ -512,6 +457,7 @@ function buildTestTurn(contextTokens, generated, candidates, sampledToken, step,
     })),
     attention,
     ffn,
+    projection: prediction?.trace?.projection || null,
     candidates,
     sampledToken,
     answer,
@@ -524,6 +470,7 @@ function buildTestFfn(vector) {
 }
 
 function chooseToken(candidates = probabilities.value, generated = generatedTokens.value) {
+  if (predictionMode.value === "connected") return sampleCandidate(candidates)?.token || "";
   const validCandidates = candidates.filter(
     (candidate) => !wouldRepeatGeneratedSequence(candidate.token, generated),
   );
@@ -670,6 +617,15 @@ function selectAttentionToken(index) {
 
 async function requestGeminiPrediction() {
   if (predictionStatus.value === "loading" || generationEnded.value || !prompt.value.trim()) return;
+  if (predictionMode.value === "connected") {
+    selectedAttentionIndex.value = null;
+    geminiPrediction.value = { source: "connected", candidates: outputProjection.value.candidates, note: CONNECTED_NOTE };
+    predictionCommitted.value = false;
+    predictionError.value = "";
+    sampledPredictionToken.value = chooseToken();
+    predictionStatus.value = "ready";
+    return;
+  }
   const controller = new AbortController();
   predictionController = controller;
   predictionStatus.value = "loading";
@@ -724,6 +680,7 @@ async function appendPrediction() {
 }
 
 function setPage(index) {
+  if (predictionMode.value === "connected" && index >= getPageIndex("ffn")) selectedAttentionIndex.value = null;
   activePageIndex.value = Math.min(pages.length - 1, Math.max(0, index));
   updateRouteFromPage();
   maybePredictOnOutputPage();
@@ -779,6 +736,7 @@ watch(temperature, () => {
   if (geminiPrediction.value) sampledPredictionToken.value = chooseToken(probabilities.value);
 });
 watch(predictionMode, reset);
+watch(ffnHiddenDimension, () => { if (predictionMode.value === "connected") { clearPrediction(); maybePredictOnOutputPage(); } });
 
 watch(activePageIndex, maybePredictOnOutputPage);
 
@@ -789,19 +747,33 @@ function showGuided() {
   window.history.replaceState(null, "", "#learn");
 }
 
-async function openInternal(page = "tokenize", context = prompt.value) {
+async function openInternal(page = "tokenize", context = prompt.value, settings = {}) {
   viewMode.value = "advanced";
+  if (settings.mode) predictionMode.value = settings.mode;
   reset();
   prompt.value = context;
   testInput.value = context;
-  temperature.value = 1;
+  temperature.value = settings.temperature ?? 1;
+  if (settings.hiddenDimension) ffnHiddenDimension.value = settings.hiddenDimension;
   await nextTick();
   setPage(getPageIndex(page));
+}
+
+function syncGuidedActivity(index) {
+  if (viewMode.value === "guided") window.history.replaceState(null, "", index === 4 ? "#connections" : "#learn");
+}
+
+async function showConnections() {
+  showGuided();
+  await nextTick();
+  guideRef.value?.openRelationships();
+  window.history.replaceState(null, "", "#connections");
 }
 
 function syncPageFromRoute() {
   if (typeof window === "undefined") return;
   const key = window.location.hash.replace(/^#/, "");
+  if (key === "connections") { showConnections(); return; }
   const index = pages.findIndex((page) => page.key === key);
   if (index >= 0) { viewMode.value = "advanced"; activePageIndex.value = index; }
   else { clearPrediction(); stopTest(); viewMode.value = "guided"; }
@@ -844,18 +816,20 @@ onUnmounted(() => {
       <button type="button" :class="{ active: viewMode === 'guided' }" :aria-pressed="viewMode === 'guided'" @click="showGuided">따라하며 배우기</button>
       <button type="button" :class="{ active: viewMode === 'advanced' }" :aria-pressed="viewMode === 'advanced'" @click="openInternal('tokenize')">내부 원리 살펴보기</button>
     </nav>
-    <GuidedLearning v-show="viewMode === 'guided'" @explore="({ page, context }) => openInternal(page, context)" />
+    <GuidedLearning ref="guideRef" v-show="viewMode === 'guided'" @activity="syncGuidedActivity" @explore="({ page, context, ...settings }) => openInternal(page, context, settings)" />
 
     <section v-show="viewMode === 'advanced'" aria-label="내부 원리 심화 보기">
     <section class="simulation-notice" aria-label="시뮬레이션 안내">
       <label for="predictionMode">후보 생성 방식
         <select id="predictionMode" v-model="predictionMode">
-          <option value="demo">교육용 데모 · API 키 불필요</option>
+          <option value="connected">계산 연결 모형 · FFN에서 확률까지</option>
+          <option value="demo">문장 예시 모형 · 별도 후보</option>
           <option v-if="serverAvailable" value="gemini">Gemini 예시 후보 · 서버 필요</option>
         </select>
       </label>
-      <p>{{ modeNote }}</p>
-      <p>토큰 ID와 벡터는 설명용 값이며, 위치 정보·다중 헤드·정규화·잔차 연결 등은 생략했습니다. Attention 이후에는 앞의 4개 성분만 사용합니다.</p>
+      <p>고정된 예시 숫자로 배우는 모형입니다. 실제 GPT의 내부 값이 아니며 자연스러운 문장을 보장하지 않습니다.</p>
+      <details><summary>이 모형의 계산 범위</summary><p>{{ modeNote }}</p><p>토큰 ID와 벡터는 설명용 값이며, 위치 정보·다중 헤드·정규화·잔차 연결 등은 생략했습니다. Attention 이후에는 앞의 4개 성분만 사용합니다.</p></details>
+      <button class="ghost-button" type="button" @click="showConnections">조건을 바꿔 개념 연결 실험하기</button>
     </section>
 
     <nav class="step-nav" aria-label="학습 단계">
@@ -892,7 +866,7 @@ onUnmounted(() => {
       <p>{{ observationPrompts[activePage.key].question }}</p>
       <details :key="activePage.key"><summary>관찰한 뒤 설명 확인하기</summary><p>{{ observationPrompts[activePage.key].answer }}</p></details>
     </aside>
-    <p v-if="activePage.key === 'output' || activePage.key === 'test'" class="advanced-boundary">여기서부터는 후보 선택을 보여 주는 별도 예시입니다. 앞에서 본 FFN 벡터를 실제 어휘 점수로 바꾸는 출력층은 생략했으며, 준비된 데모 또는 Gemini가 작성한 후보를 사용합니다. 실제 GPT의 내부 확률을 측정한 값이 아닙니다.</p>
+    <p v-if="predictionMode !== 'connected' && (activePage.key === 'output' || activePage.key === 'test')" class="advanced-boundary">여기서부터는 후보 선택을 보여 주는 별도 예시입니다. 앞에서 본 FFN 벡터를 실제 어휘 점수로 바꾸는 출력층은 생략했으며, 준비된 데모 또는 Gemini가 작성한 후보를 사용합니다. 실제 GPT의 내부 확률을 측정한 값이 아닙니다.</p>
 
     <section class="page-stage" :class="`page-stage--${activePage.key}`" aria-live="polite">
       <div class="page-heading">
@@ -901,16 +875,16 @@ onUnmounted(() => {
           <h2>{{ activePage.title }}</h2>
           <p>{{ activePage.oneLine }}</p>
         </div>
-        <div v-if="activePage.key === 'attention'" class="formula-note" aria-label="Attention 수식">
-          <span>계산식 · 점수를 비중으로 바꿔 정보 합산</span>
-          <code>Q = XWq, K = XWk, V = XWv</code>
+        <details v-if="activePage.key === 'attention'" class="formula-note" aria-label="Attention 수식">
+          <summary>계산식 펼치기</summary>
+          <code>Q = XWq + bq, K = XWk + bk, V = XWv + bv</code>
           <code>Attention = softmax(QK^T / sqrt(d_k) + mask)V</code>
-        </div>
-        <div v-else-if="activePage.key === 'ffn'" class="formula-note" aria-label="FFN 수식">
-          <span>계산식 · d는 숫자의 개수</span>
+        </details>
+        <details v-else-if="activePage.key === 'ffn'" class="formula-note" aria-label="FFN 수식">
+          <summary>계산식 펼치기 · d는 숫자의 개수</summary>
           <code>x({{ ffnVectors.input.length }}d) -> h({{ ffnHiddenDimension }}d) -> y({{ ffnVectors.output.length }}d)</code>
           <code>h = ReLU(xW1 + b1), y = hW2 + b2</code>
-        </div>
+        </details>
       </div>
 
       <div v-if="activePage.key === 'tokenize'" class="lesson-scene tokenize-scene">
@@ -1076,7 +1050,7 @@ onUnmounted(() => {
       </div>
 
       <div v-else-if="activePage.key === 'ffn'" class="lesson-scene ffn-scene">
-        <p class="ffn-context">지금 변환하는 토큰: <strong>{{ selectedAttentionItem.token }}</strong> · Attention에서 이 토큰이 모은 정보를 사용합니다.</p>
+        <p class="ffn-context">지금 변환하는 토큰: <strong>{{ selectedAttentionItem.token }}</strong> · Attention에서 이 토큰이 모은 정보를 사용합니다.<span v-if="predictionMode === 'connected'"> 다음 토큰 예측에는 문맥의 마지막 위치를 사용합니다.</span></p>
         <label class="hidden-control" for="ffnHiddenDimension">
           <span>중간 숫자 수 · 은닉 차원</span>
           <select id="ffnHiddenDimension" v-model.number="ffnHiddenDimension">
@@ -1126,7 +1100,8 @@ onUnmounted(() => {
             <span class="section-kicker">{{ predictionSourceLabel }}</span>
             <strong>{{ chosenToken.trim() || "계산 대기" }}</strong>
           </div>
-          <div class="probability-list">
+          <OutputCalculation v-if="predictionMode === 'connected'" :projection="outputProjection" />
+          <div v-else class="probability-list">
             <div v-for="item in probabilities" :key="item.token" class="probability-row">
               <span>{{ item.token }}</span>
               <span class="bar-track">
@@ -1167,7 +1142,7 @@ onUnmounted(() => {
         <div class="test-window">
           <div class="test-output" aria-live="polite">
             <p v-if="!testRuns.length && testStatus !== 'loading'" class="empty-state">
-              아래 입력창에 문장을 넣고 테스트를 실행하면, 답변 토큰이 special token까지 반복 생성되는 과정이 표시됩니다.
+              입력한 문맥으로 한 토큰씩 계산합니다. 종료 토큰이 나오거나 실험 한도인 10회에 도달하면 멈춥니다.
             </p>
 
             <template v-else>
@@ -1240,6 +1215,7 @@ onUnmounted(() => {
                         {{ token }}
                       </button>
                     </div>
+                    <p v-if="selectedTestAttentionIndexValue !== selectedTestTurn.contextTokens.length - 1" class="mini-note">이 막대는 선택한 위치를 관찰한 값입니다. 아래 FFN과 출력은 생성 당시 마지막 위치의 계산을 보여 줍니다.</p>
                     <div class="test-score-list">
                       <div
                         v-for="(item, index) in selectedTestAttentionRows"
@@ -1267,14 +1243,15 @@ onUnmounted(() => {
                   </section>
 
                   <section class="test-stage animation-stage" style="--delay: 2320ms">
-                    <span>Softmax → Sampling</span>
+                    <span>{{ selectedTestTurn.projection ? '출력 점수 → Softmax → 선택' : 'Softmax → 선택' }}</span>
+                    <p v-if="selectedTestTurn.projection" class="mini-note">FFN 출력으로 계산 · 온도 {{ selectedTestTurn.projection.temperature.toFixed(1) }}</p>
                     <div class="test-score-list">
                       <div
                         v-for="candidate in selectedTestTurn.candidates"
                         :key="`anim-candidate-${selectedTestTurn.step}-${candidate.token}`"
                         :class="{ 'is-sampled': candidate.token === selectedTestTurn.sampledToken }"
                       >
-                        <small>{{ candidate.token }}</small>
+                        <small>{{ candidate.token }}<template v-if="selectedTestTurn.projection"><br />점수 {{ candidate.logit.toFixed(2) }}</template></small>
                         <span class="bar-track">
                           <span class="bar-fill" :style="{ '--value': `${Math.round(candidate.probability * 100)}%` }"></span>
                         </span>
@@ -1300,6 +1277,7 @@ onUnmounted(() => {
               </div>
             </template>
 
+            <p v-if="testRuns.length >= TEST_MAX_ITERATIONS && testRuns.at(-1).sampledToken !== SPECIAL_TOKEN" class="api-note">10회 실험 한도로 멈췄습니다. 모델이 종료 토큰을 선택한 것은 아닙니다.</p>
             <p v-if="testError" class="api-note is-error">{{ testError }}</p>
           </div>
 

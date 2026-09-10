@@ -2,11 +2,14 @@
 import { computed, ref, watch } from 'vue';
 import { sampleCandidate } from './sampling.js';
 import ConceptExplainer from './ConceptExplainer.vue';
+import RelationshipLab from './RelationshipLab.vue';
 import { lessonPairs, contexts, checks, predictFromExamples, drawSamples, textFromTokens } from './guidedModel.js';
 
-const emit = defineEmits(['explore']);
-const steps = ['먼저 예상', '문맥 비교', '확률 실험', '한 조각씩 생성', '이해 확인'];
+const emit = defineEmits(['explore', 'activity']);
+const steps = ['먼저 예상', '문맥 비교', '확률 실험', '한 조각씩 생성', '개념 연결 실험', '이해 확인'];
 const step = ref(0);
+const relationshipsComplete = ref(false);
+const relationshipReset = ref(0);
 const pairId = ref('needs');
 const pair = computed(() => lessonPairs.find(item => item.id === pairId.value));
 const before = computed(() => contexts[pair.value.before]);
@@ -39,7 +42,7 @@ const answers = ref({});
 const reflection = ref('');
 const showReflection = ref(false);
 const correctCount = computed(() => checks.filter(question => question.options[answers.value[question.id]]?.correct).length);
-const done = computed(() => [revealed.value, compared.value && compareReason.value === 0, sampleTotal.value >= 20 && samplePrediction.value === 1, ended.value, correctCount.value === checks.length]);
+const done = computed(() => [revealed.value, compared.value && compareReason.value === 0, sampleTotal.value >= 20 && samplePrediction.value === 1, ended.value, relationshipsComplete.value, correctCount.value === checks.length]);
 const completedCount = computed(() => done.value.filter(Boolean).length);
 const compareChoices = [
   '앞의 문맥에 맞는 예시가 달라졌기 때문에',
@@ -51,6 +54,7 @@ const stageHeading = computed(() => [
   ['앞 문맥만 바꾸면 어떻게 될까요?', '바뀐 문장에서 비중이 가장 크게 늘어날 후보를 먼저 골라 보세요.'],
   ['60%라면, 열 번 중 꼭 여섯 번일까요?', '같은 후보 분포에서 여러 번 뽑아 예상 비율과 실제 횟수를 비교해 보세요.'],
   ['한 조각이 다음 예측을 바꿉니다', '다음 말을 예상하고 한 번씩 생성하세요. 새로 추가된 문맥과 후보를 비교해 보세요.'],
+  ['무엇을 바꾸면, 어디부터 달라질까요?', '문맥·온도·FFN을 하나씩 바꾸며 예상 → 실행 → 이유 확인을 진행합니다.'],
   ['새로운 상황에서도 설명할 수 있나요?', '답을 고르면 이유를 바로 확인할 수 있습니다. 헷갈린 활동으로 돌아가 다시 실험해 보세요.'],
 ][step.value]);
 
@@ -77,10 +81,13 @@ function generateOne() {
 }
 function navigate(index) { step.value = Math.max(0, Math.min(steps.length - 1, index)); }
 function restart() {
+  relationshipsComplete.value = false; relationshipReset.value += 1;
   pairId.value = 'needs'; sampleContext.value = 'thirst'; generationContext.value = 'thirst';
   step.value = 0; guess.value = ''; revealed.value = false; riseGuess.value = ''; compared.value = false; compareReason.value = null;
   resetSamples(); sampleTemperature.value = 1; samplePrediction.value = null; resetGeneration(); answers.value = {}; reflection.value = ''; showReflection.value = false;
 }
+defineExpose({ openRelationships: () => navigate(4) });
+watch(step, value => emit('activity', value));
 function explore(page) { emit('explore', { page, context: contexts[generationContext.value].label }); }
 watch(pairId, () => { guess.value = ''; revealed.value = false; riseGuess.value = ''; compared.value = false; compareReason.value = null; });
 watch([sampleTemperature, sampleContext], resetSamples);
@@ -91,7 +98,7 @@ watch(sampleContext, () => { generationContext.value = sampleContext.value; });
 <template>
   <section class="guided-learning" aria-label="따라하며 배우는 GPT 생성 원리">
     <div class="guide-status">
-      <p><strong>직접 예상하고, 바꾸고, 확인하기</strong><span>{{ completedCount }} / 5 활동 확인</span></p>
+      <p><strong>직접 예상하고, 바꾸고, 확인하기</strong><span>{{ completedCount }} / {{ steps.length }} 활동 확인</span></p>
       <button class="guide-text-button" type="button" @click="restart">활동 처음부터</button>
     </div>
     <nav class="guide-steps" aria-label="체험 단계">
@@ -179,14 +186,16 @@ watch(sampleContext, () => { generationContext.value = sampleContext.value; });
       <div v-if="ended" class="guide-finish"><strong>{{ textFromTokens(prefix) }}</strong><p>문장 전체를 한 번에 고른 것이 아니라, 새 조각을 붙일 때마다 다음 후보를 다시 계산했습니다.</p><button class="guide-secondary" type="button" @click="resetGeneration">같은 문맥으로 다시 생성</button></div>
     </div>
 
-    <div v-else class="guide-activity">
+    <div v-else-if="step === 5" class="guide-activity">
       <div class="guide-check-score"><strong>선택 문항 {{ correctCount }} / {{ checks.length }} 확인</strong><span>맞힌 개수뿐 아니라, 선택한 이유도 말로 설명해 보세요.</span></div>
       <fieldset v-for="(question, questionIndex) in checks" :key="question.id" class="guide-check"><legend>{{ questionIndex + 1 }}. {{ question.title }}</legend><p>{{ question.prompt }}</p><div class="guide-check-options"><button v-for="(option, optionIndex) in question.options" :key="option.text" type="button" :class="{ selected: answers[question.id] === optionIndex, correct: answers[question.id] === optionIndex && option.correct, incorrect: answers[question.id] === optionIndex && !option.correct }" :aria-pressed="answers[question.id] === optionIndex" @click="answers[question.id] = optionIndex">{{ option.text }}</button></div><div v-if="answers[question.id] !== undefined" class="guide-feedback" :class="{ retry: !question.options[answers[question.id]].correct }" role="status"><p>{{ question.options[answers[question.id]].feedback }}</p><button v-if="!question.options[answers[question.id]].correct" class="guide-text-button" type="button" @click="navigate(question.revisit)">관련 활동 다시 해보기</button></div></fieldset>
-      <div class="guide-reflection"><label for="guideReflection">내 말로 설명하기</label><p>문맥이 바뀌면 다음 말이 달라질 수 있는 이유와, 같은 문맥에서도 결과가 달라질 수 있는 이유를 각각 써 보세요.</p><textarea id="guideReflection" v-model="reflection" rows="4" maxlength="800" placeholder="문맥이 바뀌면… / 같은 문맥이어도…"></textarea><button type="button" class="guide-secondary" @click="showReflection = !showReflection">{{ showReflection ? '예시 설명 접기' : '예시 설명과 비교하기' }}</button><p v-if="showReflection" class="guide-feedback">앞 문맥이 바뀌면 다음에 이어질 후보의 확률 분포가 달라질 수 있습니다. 같은 문맥과 같은 분포를 사용해도 확률에 따라 하나를 뽑기 때문에 결과가 달라질 수 있습니다. 선택한 토큰을 문맥에 더한 뒤 다음 토큰을 다시 고릅니다.</p><small>작성한 문장은 자동 채점하거나 서버에 저장하지 않습니다. 자신의 설명을 예시와 비교하거나 선생님께 보여 주세요.</small></div>
-      <section class="guide-bridge"><h3>이제 컴퓨터 안에서 일어나는 일을 살펴볼까요?</h3><p>실제 GPT는 단순히 예시 문장 수를 세지 않습니다. 학습된 신경망이 문맥을 처리해 다음 토큰의 점수를 계산합니다.</p><div class="guide-bridge-grid"><button type="button" @click="explore('tokenize')"><strong>1. 토큰화</strong><span>문장을 작은 조각과 ID로 바꾸기</span></button><button type="button" @click="explore('embedding')"><strong>2. 임베딩</strong><span>토큰 ID에 해당하는 기본 숫자 목록 가져오기</span></button><button type="button" @click="explore('attention')"><strong>3. 어텐션(Attention)</strong><span>자기 위치와 앞쪽 토큰의 정보를 비중에 따라 섞기</span></button><button type="button" @click="explore('ffn')"><strong>4. 피드포워드(FFN)</strong><span>각 토큰에 모인 정보를 새 숫자 목록으로 변환하기</span></button><button type="button" @click="explore('output')"><strong>5. 출력·선택</strong><span>점수를 확률로 바꾸고 다음 토큰 고르기</span></button><button type="button" @click="explore('test')"><strong>6. 반복 생성</strong><span>새 토큰을 문맥에 붙이고 다시 예측하기</span></button></div><p class="guide-small">심화 화면의 벡터와 계산도 설명용 예시입니다. 심화의 최종 후보는 FFN에서 계산한 실제 GPT 출력이 아니라 별도로 제공됩니다.</p></section>
+      <div class="guide-reflection"><label for="guideReflection">내 말로 설명하기</label><p>문맥을 바꿀 때와 온도만 바꿀 때, 달라지는 계산 단계가 어떻게 다른지 설명해 보세요. 임베딩·어텐션·FFN·출력 점수 중 두 개 이상을 사용하고 실험에서 본 숫자도 근거로 넣으세요.</p><textarea id="guideReflection" v-model="reflection" rows="4" maxlength="800" placeholder="문맥이 바뀌면… / 같은 문맥이어도…"></textarea><button type="button" class="guide-secondary" @click="showReflection = !showReflection">{{ showReflection ? '예시 설명 접기' : '예시 설명과 비교하기' }}</button><p v-if="showReflection" class="guide-feedback">마지막 토큰이 같으면 기본 임베딩은 같아도, 앞 문맥이 달라지면 어텐션이 섞는 정보와 FFN 출력, 후보 점수가 달라질 수 있습니다. 온도만 바꾸면 이 숫자들은 그대로이고 점수로부터 구하는 선택 확률이 달라집니다. 선택한 토큰은 다음 문맥에 추가됩니다.</p><small>작성한 문장은 자동 채점하거나 서버에 저장하지 않습니다. 자신의 설명을 예시와 비교하거나 선생님께 보여 주세요.</small></div>
+      <section class="guide-bridge"><h3>이제 컴퓨터 안에서 일어나는 일을 살펴볼까요?</h3><p>실제 GPT는 단순히 예시 문장 수를 세지 않습니다. 학습된 신경망이 문맥을 처리해 다음 토큰의 점수를 계산합니다.</p><div class="guide-bridge-grid"><button type="button" @click="explore('tokenize')"><strong>1. 토큰화</strong><span>문장을 작은 조각과 ID로 바꾸기</span></button><button type="button" @click="explore('embedding')"><strong>2. 임베딩</strong><span>토큰 ID에 해당하는 기본 숫자 목록 가져오기</span></button><button type="button" @click="explore('attention')"><strong>3. 어텐션(Attention)</strong><span>자기 위치와 앞쪽 토큰의 정보를 비중에 따라 섞기</span></button><button type="button" @click="explore('ffn')"><strong>4. 피드포워드(FFN)</strong><span>각 토큰에 모인 정보를 새 숫자 목록으로 변환하기</span></button><button type="button" @click="explore('output')"><strong>5. 출력·선택</strong><span>점수를 확률로 바꾸고 다음 토큰 고르기</span></button><button type="button" @click="explore('test')"><strong>6. 반복 생성</strong><span>새 토큰을 문맥에 붙이고 다시 예측하기</span></button></div><p class="guide-small">심화 화면의 벡터와 계산도 설명용 예시입니다. 심화의 기본 ‘계산 연결 모형’은 FFN 출력에서 후보 점수와 확률까지 계산합니다. 실제 GPT의 가중치를 사용한 것은 아닙니다. ‘문장 예시’와 Gemini 후보 방식도 별도로 선택할 수 있습니다.</p></section>
     </div>
 
-    <aside class="guide-model-note"><strong>이 활동의 모형</strong><p>준비된 짧은 문장의 빈도로 확률을 계산하는 학습용 모형입니다. 실제 GPT의 내부 값이 아니며, GPT가 예시 문장을 검색해 개수를 센다는 뜻도 아닙니다. 읽기 쉽게 단어 단위로 조각을 묶었고, 실제 토큰은 단어보다 더 작을 수 있습니다.</p></aside>
+    <RelationshipLab v-show="step === 4" :key="relationshipReset" @complete="relationshipsComplete = $event" @explore="emit('explore', $event)" />
+
+    <aside v-if="step < 4" class="guide-model-note"><strong>이 활동의 모형</strong><p>준비된 짧은 문장의 빈도로 확률을 계산하는 학습용 모형입니다. 실제 GPT의 내부 값이 아니며, GPT가 예시 문장을 검색해 개수를 센다는 뜻도 아닙니다. 읽기 쉽게 단어 단위로 조각을 묶었고, 실제 토큰은 단어보다 더 작을 수 있습니다.</p></aside>
     <div class="guide-footer"><button class="guide-secondary" type="button" :disabled="step === 0" @click="navigate(step - 1)">이전 활동</button><p>{{ done[step] ? '이 활동을 확인했어요.' : '예상하고 실행한 뒤, 결과를 확인해 보세요.' }}</p><button v-if="step < steps.length - 1" class="guide-primary" type="button" @click="navigate(step + 1)">{{ steps[step + 1] }} →</button><button v-else class="guide-primary" type="button" @click="explore('tokenize')">내부 원리 살펴보기 →</button></div>
   </section>
 </template>
